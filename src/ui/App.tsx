@@ -3,6 +3,7 @@ import { POPULAR_CORRIDORS, planCorridorItinerary, type RoutePreset } from '../e
 import { auditDutyIntervals } from '../engine/hos';
 import type { DutyInterval } from '../engine/types';
 import { LogbookGrid } from './LogbookGrid';
+import { Realtime3DCorridor } from './Realtime3DCorridor';
 
 export const App: React.FC = () => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>('chi-dal');
@@ -11,6 +12,7 @@ export const App: React.FC = () => {
   const [distanceMiles, setDistanceMiles] = useState<number>(925);
   const [avgSpeedMph, setAvgSpeedMph] = useState<number>(55);
   const [driverMode, setDriverMode] = useState<'solo' | 'team'>('solo');
+  const [activeTimeHours, setActiveTimeHours] = useState<number>(0);
 
   const handleSelectPreset = (preset: RoutePreset) => {
     setSelectedPresetId(preset.id);
@@ -193,6 +195,13 @@ export const App: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Realtime 3D Isometric Corridor Digital Twin */}
+      <Realtime3DCorridor
+        plan={itinerary}
+        activeTimeHours={activeTimeHours}
+        onTimeChange={setActiveTimeHours}
+      />
 
       {/* Main Two-Column View */}
       <div className="main-grid">
