@@ -73,7 +73,10 @@ export const App: React.FC = () => {
         <div>
           <div className="product-badges">
             <span className="badge badge-purple">Product 03</span>
-            <span className="badge badge-emerald">FMCSA Part 395 Verified</span>
+            <span className="badge badge-emerald">
+              <span className="live-pulse" />
+              FMCSA § 395 ELD Active
+            </span>
             <span className="badge badge-blue">Port 5175</span>
           </div>
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#f8fafc' }}>
@@ -110,7 +113,12 @@ export const App: React.FC = () => {
       {/* FMCSA Clocks Banner */}
       <div className="clocks-grid">
         <div className="clock-card">
-          <div className="clock-title">11-Hour Drive Clock</div>
+          <div className="clock-title">
+            <span>11-Hour Drive Clock</span>
+            <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800 }}>
+              {driverMode === 'team' ? 'TEAM EXPEDITED' : 'SOLO CAP'}
+            </span>
+          </div>
           <div className="clock-value">
             {driverMode === 'team' ? '11.0' : Math.max(0, 11 - (itinerary.pureDrivingHours % 11)).toFixed(1)}
             <span>/ 11.0 hrs</span>
@@ -127,7 +135,12 @@ export const App: React.FC = () => {
         </div>
 
         <div className="clock-card">
-          <div className="clock-title">14-Hour Shift Window</div>
+          <div className="clock-title">
+            <span>14-Hour Shift Window</span>
+            <span style={{ fontSize: '10px', color: '#c084fc', fontWeight: 800 }}>
+              {driverMode === 'team' ? 'CONTINUOUS' : 'WINDOW CAP'}
+            </span>
+          </div>
           <div className="clock-value">
             {driverMode === 'team' ? '14.0' : Math.max(0, 14 - ((itinerary.pureDrivingHours + itinerary.totalOnDutyHours) % 14)).toFixed(1)}
             <span>/ 14.0 hrs</span>
@@ -137,14 +150,17 @@ export const App: React.FC = () => {
               className="clock-bar-fill"
               style={{
                 width: `${driverMode === 'team' ? 100 : Math.min(100, ((14 - ((itinerary.pureDrivingHours + itinerary.totalOnDutyHours) % 14)) / 14) * 100)}%`,
-                backgroundColor: '#a855f7',
+                backgroundColor: '#c084fc',
               }}
             />
           </div>
         </div>
 
         <div className="clock-card">
-          <div className="clock-title">30-Min Rest Break Clock</div>
+          <div className="clock-title">
+            <span>30-Min Rest Break</span>
+            <span style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 800 }}>8H TRIGGER</span>
+          </div>
           <div className="clock-value">
             {driverMode === 'team' ? '8.0' : '8.0'}
             <span>/ 8.0 hrs max</span>
@@ -152,13 +168,16 @@ export const App: React.FC = () => {
           <div className="clock-bar-bg">
             <div
               className="clock-bar-fill"
-              style={{ width: '100%', backgroundColor: '#f59e0b' }}
+              style={{ width: '100%', backgroundColor: '#fbbf24' }}
             />
           </div>
         </div>
 
         <div className="clock-card">
-          <div className="clock-title">70-Hour / 8-Day Cycle</div>
+          <div className="clock-title">
+            <span>70-Hour / 8-Day Cycle</span>
+            <span style={{ fontSize: '10px', color: '#34d399', fontWeight: 800 }}>STATUTORY OK</span>
+          </div>
           <div className="clock-value">
             {Math.max(0, 70 - itinerary.pureDrivingHours - itinerary.totalOnDutyHours).toFixed(1)}
             <span>/ 70.0 hrs</span>
@@ -168,7 +187,7 @@ export const App: React.FC = () => {
               className="clock-bar-fill"
               style={{
                 width: `${Math.max(10, ((70 - itinerary.pureDrivingHours) / 70) * 100)}%`,
-                backgroundColor: '#10b981',
+                backgroundColor: '#34d399',
               }}
             />
           </div>
