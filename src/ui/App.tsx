@@ -4,6 +4,7 @@ import { auditDutyIntervals } from '../engine/hos';
 import type { DutyInterval } from '../engine/types';
 import { LogbookGrid } from './LogbookGrid';
 import { Realtime3DCorridor } from './Realtime3DCorridor';
+import { SuiteDock } from './SuiteDock';
 
 export const App: React.FC = () => {
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -104,7 +105,8 @@ export const App: React.FC = () => {
   }, [dutyIntervals]);
 
   return (
-    <div className="app-container">
+    <main className="app-container">
+      <SuiteDock currentProductId="product-03-hos-planner" />
       {/* Top Header */}
       <header className="app-header">
         <div>
@@ -326,8 +328,10 @@ export const App: React.FC = () => {
 
           {/* Form Fields */}
           <div className="form-group">
-            <label>Origin Terminal</label>
+            <label htmlFor="origin-terminal-input">Origin Terminal</label>
             <input
+              id="origin-terminal-input"
+              aria-label="Origin Terminal"
               type="text"
               value={origin}
               onChange={e => {
@@ -338,8 +342,10 @@ export const App: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label>Destination Consignee</label>
+            <label htmlFor="destination-consignee-input">Destination Consignee</label>
             <input
+              id="destination-consignee-input"
+              aria-label="Destination Consignee"
               type="text"
               value={destination}
               onChange={e => {
@@ -351,8 +357,10 @@ export const App: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div className="form-group">
-              <label>Corridor Miles</label>
+              <label htmlFor="corridor-miles-input">Corridor Miles</label>
               <input
+                id="corridor-miles-input"
+                aria-label="Corridor Distance in Miles"
                 type="number"
                 value={distanceMiles}
                 onChange={e => {
@@ -362,8 +370,10 @@ export const App: React.FC = () => {
               />
             </div>
             <div className="form-group">
-              <label>Avg Speed (MPH)</label>
+              <label htmlFor="avg-speed-input">Avg Speed (MPH)</label>
               <input
+                id="avg-speed-input"
+                aria-label="Average Speed in Miles Per Hour"
                 type="number"
                 value={avgSpeedMph}
                 onChange={e => setAvgSpeedMph(Number(e.target.value))}
@@ -372,8 +382,10 @@ export const App: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label>Driver Operating Mode</label>
+            <label htmlFor="driver-operating-mode-select">Driver Operating Mode</label>
             <select
+              id="driver-operating-mode-select"
+              aria-label="Driver Operating Mode Selection"
               value={driverMode}
               onChange={e => setDriverMode(e.target.value as 'solo' | 'team')}
             >
@@ -477,6 +489,6 @@ export const App: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };

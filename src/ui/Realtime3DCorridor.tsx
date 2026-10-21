@@ -415,6 +415,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
         </div>
         <input
           type="range"
+          aria-label="Corridor transit simulation scrub time in hours"
           min="0"
           max={totalHours}
           step="0.1"
