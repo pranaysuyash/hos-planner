@@ -6,13 +6,48 @@ import { LogbookGrid } from './LogbookGrid';
 import { Realtime3DCorridor } from './Realtime3DCorridor';
 
 export const App: React.FC = () => {
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('chi-dal');
-  const [origin, setOrigin] = useState<string>('Chicago, IL');
+  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const source = params.get('source');
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(source ? 'custom' : 'chi-dal');
+  const [origin, setOrigin] = useState<string>(() => {
+    if (params.get('locationCity')) return `${params.get('locationCity')}, ${params.get('locationState') || 'US'}`;
+    return 'Chicago, IL';
+  });
   const [destination, setDestination] = useState<string>('Dallas, TX');
-  const [distanceMiles, setDistanceMiles] = useState<number>(925);
-  const [avgSpeedMph, setAvgSpeedMph] = useState<number>(55);
+  const [distanceMiles, setDistanceMiles] = useState<number>(() => {
+    const m = Number(params.get('miles'));
+    return m > 0 ? m : 925;
+  });
+  const [avgSpeedMph, setAvgSpeedMph] = useState<number>(() => {
+    const s = Number(params.get('speed')) || Number(params.get('speedMph'));
+    return s > 0 ? s : 55;
+  });
   const [driverMode, setDriverMode] = useState<'solo' | 'team'>('solo');
   const [activeTimeHours, setActiveTimeHours] = useState<number>(0);
+
+  const [importedBanner, setImportedBanner] = useState<{ title: string; subtitle: string; source: string } | null>(() => {
+    if (source === 'asset_studio_p04') {
+      const vName = params.get('vehicleName') || 'Asset Studio Vehicle';
+      const m = params.get('miles');
+      return {
+        title: `Imported Corridor Spec from Product 04 (Asset Studio)`,
+        subtitle: `Equipment: ${vName} · Lane Distance: ${m ? `${m} mi` : 'Specified'} · Range: ${params.get('rangeMiles') || 'N/A'} mi`,
+        source: 'P04',
+      };
+    }
+    if (source === 'product-05-telematics') {
+      const driver = params.get('driverName') || 'Assigned Driver';
+      const loc = `${params.get('locationCity') || 'En Route'}, ${params.get('locationState') || 'US'}`;
+      const status = params.get('currentDutyStatus') || 'DRIVING';
+      return {
+        title: `Live Driver Telematics Stream from Product 05`,
+        subtitle: `Driver: ${driver} · Live GPS: ${loc} · Active Status: ${status.replace('_', ' ').toUpperCase()}`,
+        source: 'P05',
+      };
+    }
+    return null;
+  });
 
   const handleSelectPreset = (preset: RoutePreset) => {
     setSelectedPresetId(preset.id);
@@ -109,8 +144,64 @@ export const App: React.FC = () => {
           >
             💰 Product 02: Freight Pricing ↗
           </a>
+          <a
+            href="http://localhost:5176/"
+            target="_blank"
+            rel="noreferrer"
+            className="cross-link"
+            style={{ borderColor: '#38bdf8', color: '#38bdf8' }}
+            title="Open Product 04: Fleet & Cargo Asset Studio"
+          >
+            🚛 Product 04: Asset Studio ↗
+          </a>
         </div>
       </header>
+
+      {/* Cross-Product Inbound Bridge Banner */}
+      {importedBanner && (
+        <div style={{
+          background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.15), rgba(16, 185, 129, 0.15))',
+          border: '1px solid #38bdf8',
+          borderRadius: '8px',
+          padding: '12px 18px',
+          margin: '0 0 20px 0',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 0 15px rgba(56, 189, 248, 0.2)'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                background: '#38bdf8',
+                color: '#000',
+                fontSize: '10px',
+                fontWeight: 900,
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>BRIDGE INTAKE</span>
+              <strong style={{ color: '#fff', fontSize: '14px' }}>{importedBanner.title}</strong>
+            </div>
+            <p style={{ color: '#94a3b8', fontSize: '12px', marginTop: 4, fontFamily: 'monospace' }}>
+              {importedBanner.subtitle}
+            </p>
+          </div>
+          <button
+            onClick={() => setImportedBanner(null)}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
+              color: '#94a3b8',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer'
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* FMCSA Clocks Banner */}
       <div className="clocks-grid">

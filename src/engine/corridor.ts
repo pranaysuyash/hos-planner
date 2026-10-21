@@ -159,15 +159,33 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
   } else {
     // Solo driving: Strictly adheres to 11-hr drive, 14-hr window, and 8-hr break rules
     while (remainingMiles > 0) {
-      // Determine how many minutes we can drive right now
-      const maxContinuousDriveMinutes = Math.min(
-        shiftDriveMinutesRemaining,
-        shiftWindowMinutesRemaining,
-        driveMinutesUntil30mBreak,
-      );
+      // Check if driver needs a mandatory 30-min break after 8 hours of driving
+      if (driveMinutesUntil30mBreak <= 0) {
+        breakCount++;
+        const breakDuration = 30;
+        currentTimeMinutes += breakDuration;
+        shiftWindowMinutesRemaining -= breakDuration;
+        totalRestMinutes += breakDuration;
 
-      if (maxContinuousDriveMinutes <= 0) {
-        // Need a 10-hour sleeper berth reset!
+        waypoints.push({
+          id: `wp-${waypointCounter++}`,
+          type: 'MANDATORY_30M_BREAK',
+          title: `Mandatory 30-Minute Rest Break #${breakCount}`,
+          location: `Highway Travel Plaza (Mile ${Math.round(currentMile)})`,
+          distanceMiles: 0,
+          cumulativeMiles: currentMile,
+          durationMinutes: breakDuration,
+          cumulativeTimeMinutes: currentTimeMinutes,
+          dutyStatus: 'OFF_DUTY',
+          notes: 'Required under FMCSA 49 CFR § 395.3(a)(3)(ii) after 8 hours driving without break.',
+        });
+
+        driveMinutesUntil30mBreak = HOS_LIMITS.MAX_DRIVE_HOURS_BEFORE_BREAK * 60;
+        continue;
+      }
+
+      // Check if driver exhausted 11h drive cap or 14h shift window (needs 10-hour sleeper berth reset)
+      if (shiftDriveMinutesRemaining <= 0 || shiftWindowMinutesRemaining <= 0) {
         sleeperCount++;
         const restDuration = 10 * 60; // 600 min
         currentTimeMinutes += restDuration;
@@ -189,31 +207,6 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
         // Reset shift clocks
         shiftDriveMinutesRemaining = HOS_LIMITS.MAX_DRIVE_HOURS_PER_SHIFT * 60;
         shiftWindowMinutesRemaining = HOS_LIMITS.MAX_ON_DUTY_HOURS_PER_SHIFT * 60;
-        driveMinutesUntil30mBreak = HOS_LIMITS.MAX_DRIVE_HOURS_BEFORE_BREAK * 60;
-        continue;
-      }
-
-      // Check if driver needs a 30-min break
-      if (driveMinutesUntil30mBreak <= 0) {
-        breakCount++;
-        const breakDuration = 30;
-        currentTimeMinutes += breakDuration;
-        shiftWindowMinutesRemaining -= breakDuration;
-        totalRestMinutes += breakDuration;
-
-        waypoints.push({
-          id: `wp-${waypointCounter++}`,
-          type: 'MANDATORY_30M_BREAK',
-          title: `Mandatory 30-Minute Rest Break #${breakCount}`,
-          location: `Highway Travel Plaza (Mile ${Math.round(currentMile)})`,
-          distanceMiles: 0,
-          cumulativeMiles: currentMile,
-          durationMinutes: breakDuration,
-          cumulativeTimeMinutes: currentTimeMinutes,
-          dutyStatus: 'OFF_DUTY',
-          notes: 'Required under FMCSA 49 CFR § 395.3(a)(3)(ii) after 8 hours driving without break.',
-        });
-
         driveMinutesUntil30mBreak = HOS_LIMITS.MAX_DRIVE_HOURS_BEFORE_BREAK * 60;
         continue;
       }

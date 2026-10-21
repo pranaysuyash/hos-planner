@@ -90,4 +90,29 @@ describe('Interstate Corridor Transit Planner', () => {
     expect(teamPlan.mandatorySleeperCount).toBe(0); // No 10h truck layovers
     expect(teamPlan.totalTransitHours).toBeLessThan(18.0); // Continuous driving with driver swaps
   });
+
+  it('correctly calculates transit parameters for inbound bridge payloads from Product 04 and 05', () => {
+    // Simulated Product 04 payload: 600 miles @ 62 mph for a dry van
+    const planP04 = planCorridorItinerary({
+      origin: 'Kansas City, MO',
+      destination: 'Dallas, TX',
+      distanceMiles: 600,
+      avgSpeedMph: 62,
+      driverMode: 'solo',
+    });
+    expect(planP04.pureDrivingHours).toBeCloseTo(9.68, 1);
+    expect(planP04.mandatorySleeperCount).toBe(0); // Under 11 hours pure driving!
+    expect(planP04.isLegal).toBe(true);
+
+    // Simulated Product 05 telematics route: 1200 miles long haul
+    const planP05 = planCorridorItinerary({
+      origin: 'Chicago, IL',
+      destination: 'Miami, FL',
+      distanceMiles: 1380,
+      avgSpeedMph: 60,
+      driverMode: 'team',
+    });
+    expect(planP05.pureDrivingHours).toBe(23.0);
+    expect(planP05.mandatorySleeperCount).toBe(0); // Team driving expedited
+  });
 });
