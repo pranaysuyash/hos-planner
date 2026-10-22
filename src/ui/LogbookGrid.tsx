@@ -75,7 +75,7 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
       <div className="logbook-head">
         <div className="logbook-head-left">
           <span className="logbook-stamp">
-            FMCSA § 395 24-HR RECORD OF DUTY STATUS
+            FMCSA § 395 24-HR RECORD OF DUTY STATUS (SCENARIO MODEL)
           </span>
           <span className="logbook-meta">
             Commercial Driver: <strong style={{ color: '#ffffff' }}>{driverName}</strong>
@@ -83,9 +83,9 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
         </div>
         <div className="logbook-head-right">
           <span>Date: <strong style={{ color: '#ffffff', fontFamily: 'monospace' }}>{dateLabel}</strong></span>
-          <span style={{ color: '#34d399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span className="live-pulse" style={{ background: '#34d399', boxShadow: '0 0 8px #34d399' }} />
-            ELD Synchronized
+          <span style={{ color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span className="live-pulse" style={{ background: '#38bdf8', boxShadow: '0 0 8px #38bdf8' }} />
+            Simulated Log Grid
           </span>
         </div>
       </div>
@@ -235,7 +235,7 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
       {/* Interval Breakdown Grid */}
       <div className="logbook-breakdown">
         <div className="logbook-breakdown-title">
-          DUTY STATUS CHANGE LOG &amp; GEOTAGGED ELD RECORDS
+          DUTY STATUS CHANGE LOG &amp; SIMULATED WAYPOINT RECORDS (INDICATIVE)
         </div>
         <div className="logbook-cards-grid">
           {intervals.map((it, idx) => {

@@ -2,7 +2,7 @@
 
 - Doctrine path: /Users/pranay/Projects/trucking/products/product-03-hos-planner/OPERATING_DOCTRINE.md
 - SHA-256: e14bab7b1964d8b755c9e6c7f5b1c2b44e1d726033fa23aeaee6ce921e271a75
-- Generated: 2026-10-21T06:52:30Z
+- Generated: 2026-10-21T06:55:25Z
 - This is a generated review artifact, not an instruction source.
 
 ## SECTION_0
@@ -15,7 +15,7 @@
 
 - Label: Full doctrine integrated audit
 - Reviewed: True
-- Evidence: Full doctrine review completed across 19 sections: verified FMCSA Part 395 11h/14h/30m engine, interstate corridor transit scheduler, ELD 24h visual log grid, vitest test suite passing (6/6 tests), TypeScript build clean, and production deployed to Cloudflare Pages (hosdispatch.pages.dev).
+- Evidence: Full doctrine review completed across 19 sections: resolved audit P0 by fixing 14-consecutive-hour window calculation (elapsed time not paused by off-duty breaks), enforcing mandatory 30-min rest breaks, connecting independent auditDutyIntervals to corridor itinerary, modeling team drivers as two distinct audited streams, updating test suite to 8 passing tests, and deploying verified build to Cloudflare Pages (hosdispatch.pages.dev).
 
 ## SECTION_1
 

@@ -88,7 +88,7 @@ describe('Interstate Corridor Transit Planner', () => {
 
     expect(teamPlan.isLegal).toBe(true);
     expect(teamPlan.mandatorySleeperCount).toBe(0); // No 10h truck layovers
-    expect(teamPlan.totalTransitHours).toBeLessThan(18.0); // Continuous driving with driver swaps
+    expect(teamPlan.totalTransitHours).toBeLessThan(19.0); // Continuous driving with driver swaps (vs solo which requires 10h layover and takes > 28h)
   });
 
   it('correctly calculates transit parameters for inbound bridge payloads from Product 04 and 05', () => {
@@ -114,5 +114,23 @@ describe('Interstate Corridor Transit Planner', () => {
     });
     expect(planP05.pureDrivingHours).toBe(23.0);
     expect(planP05.mandatorySleeperCount).toBe(0); // Team driving expedited
+  });
+
+  it('detects 14-consecutive-hour window violation when off-duty time occurs within shift', () => {
+    // Driver starts shift at 06:00 (minute 0)
+    // 06:00 - 07:00 (60m) On-duty pre-trip
+    // 07:00 - 13:00 (360m = 6h) Off-duty waiting/break
+    // 13:00 - 23:00 (600m = 10h) Driving
+    // Shift window expires at minute 840 (14 consecutive hours from 06:00 = 20:00).
+    // Driving between 20:00 and 23:00 (minutes 840 to 1020) is an illegal 14-hour window violation!
+    const intervals: DutyInterval[] = [
+      { status: 'ON_DUTY_NOT_DRIVING', startMinutes: 0, durationMinutes: 60, location: 'Terminal', remark: 'Pre-trip' },
+      { status: 'OFF_DUTY', startMinutes: 60, durationMinutes: 360, location: 'Travel Plaza', remark: 'Off duty break' },
+      { status: 'DRIVING', startMinutes: 420, durationMinutes: 600, location: 'Highway', remark: 'Driving leg' },
+    ];
+
+    const audit = auditDutyIntervals(intervals);
+    expect(audit.isCompliant).toBe(false);
+    expect(audit.violations.some(v => v.rule === '14_HOUR_WINDOW')).toBe(true);
   });
 });

@@ -4,8 +4,8 @@
  * with mandatory 30-min rest breaks, 10-hr sleeper berths, and fuel stops.
  */
 
-import type { CorridorItineraryPlan, HosWaypoint, HosViolation } from './types';
-import { HOS_LIMITS } from './hos';
+import type { CorridorItineraryPlan, HosWaypoint, DutyInterval, HosViolation } from './types';
+import { HOS_LIMITS, auditDutyIntervals } from './hos';
 
 export interface RoutePreset {
   id: string;
@@ -76,7 +76,6 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
   } = opts;
 
   const waypoints: HosWaypoint[] = [];
-  const violations: HosViolation[] = [];
 
   let currentMile = 0;
   let currentTimeMinutes = 0; // minutes from departure
@@ -109,52 +108,346 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
   let totalOnDutyMinutes = preTripMinutes;
   let totalRestMinutes = 0;
 
+  const driverAIntervals: DutyInterval[] = [];
+  const driverBIntervals: DutyInterval[] = [];
+
   if (driverMode === 'team') {
-    // Team driving: Truck rolls continuously except for 15-min driver swaps & fuel
+    // Origin: Driver A does pre-trip, Driver B is off duty
+    driverAIntervals.push({
+      status: 'ON_DUTY_NOT_DRIVING',
+      startMinutes: 0,
+      durationMinutes: preTripMinutes,
+      location: origin,
+      remark: 'Driver A: Pre-Trip Inspection',
+    });
+    driverBIntervals.push({
+      status: 'OFF_DUTY',
+      startMinutes: 0,
+      durationMinutes: preTripMinutes,
+      location: origin,
+      remark: 'Driver B: Passenger / Off Duty',
+    });
+
+    let activeDriver: 'A' | 'B' = 'A';
+    let teamLegIndex = 0;
+
+    // Team driving: Truck rolls continuously with scheduled driver rotations and mandatory 30m breaks
     while (remainingMiles > 0) {
-      // Team driver shift is typically 10 hours driving before swapping
-      const maxDriveHoursForLeg = 10;
-      const legMilesAvailable = maxDriveHoursForLeg * avgSpeedMph;
-      const legMiles = Math.min(remainingMiles, legMilesAvailable);
-      const legDurationMinutes = Math.round((legMiles / avgSpeedMph) * 60);
+      // Each driver stint is at most 10 hours driving (well under 11h driving cap)
+      // If trip can be finished in this stint, only take required miles
+      const stintDriveHours = Math.min(10, remainingMiles / avgSpeedMph);
+      const stintMiles = Math.min(remainingMiles, stintDriveHours * avgSpeedMph);
+      const currentDriverName = activeDriver === 'A' ? 'Driver A' : 'Driver B';
+      const restingDriverName = activeDriver === 'A' ? 'Driver B' : 'Driver A';
 
-      currentMile += legMiles;
-      currentTimeMinutes += legDurationMinutes;
-      pureDrivingMinutes += legDurationMinutes;
-      remainingMiles -= legMiles;
+      // If stint exceeds 8 hours of driving, FMCSA 49 CFR § 395.3(a)(3)(ii) requires a 30-min break
+      if (stintDriveHours > 8) {
+        const firstHalfHours = Number((stintDriveHours / 2).toFixed(2));
+        const firstHalfMiles = firstHalfHours * avgSpeedMph;
+        const firstHalfMinutes = Math.round((firstHalfMiles / avgSpeedMph) * 60);
 
-      waypoints.push({
-        id: `wp-${waypointCounter++}`,
-        type: 'DRIVING_LEG',
-        title: `Team Driving Leg (${Math.round(legMiles)} mi)`,
-        location: `En Route Mile ${Math.round(currentMile)}`,
-        distanceMiles: legMiles,
-        cumulativeMiles: currentMile,
-        durationMinutes: legDurationMinutes,
-        cumulativeTimeMinutes: currentTimeMinutes,
-        dutyStatus: 'DRIVING',
-        notes: `Active Driver in cab; Relief Driver resting in Sleeper Berth.`,
-      });
+        // Leg 1 of stint
+        const leg1Start = currentTimeMinutes;
+        currentMile += firstHalfMiles;
+        currentTimeMinutes += firstHalfMinutes;
+        pureDrivingMinutes += firstHalfMinutes;
+        remainingMiles -= firstHalfMiles;
+
+        waypoints.push({
+          id: `wp-${waypointCounter++}`,
+          type: 'DRIVING_LEG',
+          title: `Team Driving Leg #${++teamLegIndex} (${Math.round(firstHalfMiles)} mi)`,
+          location: `En Route Mile ${Math.round(currentMile)}`,
+          distanceMiles: firstHalfMiles,
+          cumulativeMiles: currentMile,
+          durationMinutes: firstHalfMinutes,
+          cumulativeTimeMinutes: currentTimeMinutes,
+          dutyStatus: 'DRIVING',
+          notes: `${currentDriverName} driving; ${restingDriverName} resting in Sleeper Berth.`,
+        });
+
+        if (activeDriver === 'A') {
+          driverAIntervals.push({
+            status: 'DRIVING',
+            startMinutes: leg1Start,
+            durationMinutes: firstHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Driving Leg',
+          });
+          driverBIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: leg1Start,
+            durationMinutes: firstHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Resting in Sleeper Berth',
+          });
+        } else {
+          driverBIntervals.push({
+            status: 'DRIVING',
+            startMinutes: leg1Start,
+            durationMinutes: firstHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Driving Leg',
+          });
+          driverAIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: leg1Start,
+            durationMinutes: firstHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Resting in Sleeper Berth',
+          });
+        }
+
+        // 30-Minute Rest Break
+        breakCount++;
+        const breakDuration = 30;
+        const breakStart = currentTimeMinutes;
+        currentTimeMinutes += breakDuration;
+        totalRestMinutes += breakDuration;
+
+        waypoints.push({
+          id: `wp-${waypointCounter++}`,
+          type: 'MANDATORY_30M_BREAK',
+          title: `Mandatory 30-Minute Rest Break #${breakCount}`,
+          location: `Highway Travel Plaza (Mile ${Math.round(currentMile)})`,
+          distanceMiles: 0,
+          cumulativeMiles: currentMile,
+          durationMinutes: breakDuration,
+          cumulativeTimeMinutes: currentTimeMinutes,
+          dutyStatus: 'OFF_DUTY',
+          notes: `${currentDriverName} rest break; required after 8h driving (§ 395.3(a)(3)(ii)).`,
+        });
+
+        if (activeDriver === 'A') {
+          driverAIntervals.push({
+            status: 'OFF_DUTY',
+            startMinutes: breakStart,
+            durationMinutes: breakDuration,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: 30m Rest Break',
+          });
+          driverBIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: breakStart,
+            durationMinutes: breakDuration,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Resting in Sleeper Berth',
+          });
+        } else {
+          driverBIntervals.push({
+            status: 'OFF_DUTY',
+            startMinutes: breakStart,
+            durationMinutes: breakDuration,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: 30m Rest Break',
+          });
+          driverAIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: breakStart,
+            durationMinutes: breakDuration,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Resting in Sleeper Berth',
+          });
+        }
+
+        // Leg 2 of stint
+        const secondHalfMiles = Math.min(remainingMiles, (stintDriveHours - firstHalfHours) * avgSpeedMph);
+        const secondHalfMinutes = Math.round((secondHalfMiles / avgSpeedMph) * 60);
+
+        const leg2Start = currentTimeMinutes;
+        currentMile += secondHalfMiles;
+        currentTimeMinutes += secondHalfMinutes;
+        pureDrivingMinutes += secondHalfMinutes;
+        remainingMiles -= secondHalfMiles;
+
+        waypoints.push({
+          id: `wp-${waypointCounter++}`,
+          type: 'DRIVING_LEG',
+          title: `Team Driving Leg #${++teamLegIndex} (${Math.round(secondHalfMiles)} mi)`,
+          location: `En Route Mile ${Math.round(currentMile)}`,
+          distanceMiles: secondHalfMiles,
+          cumulativeMiles: currentMile,
+          durationMinutes: secondHalfMinutes,
+          cumulativeTimeMinutes: currentTimeMinutes,
+          dutyStatus: 'DRIVING',
+          notes: `${currentDriverName} driving; ${restingDriverName} resting in Sleeper Berth.`,
+        });
+
+        if (activeDriver === 'A') {
+          driverAIntervals.push({
+            status: 'DRIVING',
+            startMinutes: leg2Start,
+            durationMinutes: secondHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Driving Leg',
+          });
+          driverBIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: leg2Start,
+            durationMinutes: secondHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Resting in Sleeper Berth',
+          });
+        } else {
+          driverBIntervals.push({
+            status: 'DRIVING',
+            startMinutes: leg2Start,
+            durationMinutes: secondHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Driving Leg',
+          });
+          driverAIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: leg2Start,
+            durationMinutes: secondHalfMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Resting in Sleeper Berth',
+          });
+        }
+      } else {
+        // Continuous leg under 8 hours (no break needed)
+        const legMinutes = Math.round((stintMiles / avgSpeedMph) * 60);
+        const legStart = currentTimeMinutes;
+        currentMile += stintMiles;
+        currentTimeMinutes += legMinutes;
+        pureDrivingMinutes += legMinutes;
+        remainingMiles -= stintMiles;
+
+        waypoints.push({
+          id: `wp-${waypointCounter++}`,
+          type: 'DRIVING_LEG',
+          title: `Team Driving Leg #${++teamLegIndex} (${Math.round(stintMiles)} mi)`,
+          location: `En Route Mile ${Math.round(currentMile)}`,
+          distanceMiles: stintMiles,
+          cumulativeMiles: currentMile,
+          durationMinutes: legMinutes,
+          cumulativeTimeMinutes: currentTimeMinutes,
+          dutyStatus: 'DRIVING',
+          notes: `${currentDriverName} behind wheel; ${restingDriverName} resting in Sleeper Berth.`,
+        });
+
+        if (activeDriver === 'A') {
+          driverAIntervals.push({
+            status: 'DRIVING',
+            startMinutes: legStart,
+            durationMinutes: legMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Driving Leg',
+          });
+          driverBIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: legStart,
+            durationMinutes: legMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Resting in Sleeper Berth',
+          });
+        } else {
+          driverBIntervals.push({
+            status: 'DRIVING',
+            startMinutes: legStart,
+            durationMinutes: legMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver B: Driving Leg',
+          });
+          driverAIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: legStart,
+            durationMinutes: legMinutes,
+            location: `Mile ${Math.round(currentMile)}`,
+            remark: 'Driver A: Resting in Sleeper Berth',
+          });
+        }
+      }
 
       if (remainingMiles > 0) {
-        // Driver swap + fuel inspection
-        const swapMinutes = 20;
+        // Driver swap + pre-trip inspection (15 min)
+        const swapMinutes = 15;
+        const swapStart = currentTimeMinutes;
         currentTimeMinutes += swapMinutes;
         totalOnDutyMinutes += swapMinutes;
 
         waypoints.push({
           id: `wp-${waypointCounter++}`,
           type: 'FUEL_INSPECTION',
-          title: 'Driver Swap & Fueling',
+          title: `Driver Swap & Pre-Trip Inspection (${restingDriverName} takes wheel)`,
           location: `Interstate Travel Plaza (MP ${Math.round(currentMile)})`,
           distanceMiles: 0,
           cumulativeMiles: currentMile,
           durationMinutes: swapMinutes,
           cumulativeTimeMinutes: currentTimeMinutes,
           dutyStatus: 'ON_DUTY_NOT_DRIVING',
-          notes: 'Switch active driver log to Sleeper Berth; Co-driver starts driving shift.',
+          notes: `${currentDriverName} shifts to Sleeper Berth; ${restingDriverName} conducts inspection and takes wheel.`,
         });
+
+        if (activeDriver === 'A') {
+          driverAIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: swapStart,
+            durationMinutes: swapMinutes,
+            location: `Travel Plaza MP ${Math.round(currentMile)}`,
+            remark: 'Driver A: Shift to Sleeper',
+          });
+          driverBIntervals.push({
+            status: 'ON_DUTY_NOT_DRIVING',
+            startMinutes: swapStart,
+            durationMinutes: swapMinutes,
+            location: `Travel Plaza MP ${Math.round(currentMile)}`,
+            remark: 'Driver B: Pre-Drive Inspection & Fuel',
+          });
+        } else {
+          driverBIntervals.push({
+            status: 'SLEEPER_BERTH',
+            startMinutes: swapStart,
+            durationMinutes: swapMinutes,
+            location: `Travel Plaza MP ${Math.round(currentMile)}`,
+            remark: 'Driver B: Shift to Sleeper',
+          });
+          driverAIntervals.push({
+            status: 'ON_DUTY_NOT_DRIVING',
+            startMinutes: swapStart,
+            durationMinutes: swapMinutes,
+            location: `Travel Plaza MP ${Math.round(currentMile)}`,
+            remark: 'Driver A: Pre-Drive Inspection & Fuel',
+          });
+        }
+
+        // Toggle active driver
+        activeDriver = activeDriver === 'A' ? 'B' : 'A';
       }
+    }
+
+    // Destination: Active driver does post-trip, other remains off duty
+    const postTripStart = currentTimeMinutes;
+    if (activeDriver === 'A') {
+      driverAIntervals.push({
+        status: 'ON_DUTY_NOT_DRIVING',
+        startMinutes: postTripStart,
+        durationMinutes: 20,
+        location: destination,
+        remark: 'Driver A: Consignee Post-Trip',
+      });
+      driverBIntervals.push({
+        status: 'OFF_DUTY',
+        startMinutes: postTripStart,
+        durationMinutes: 20,
+        location: destination,
+        remark: 'Driver B: Off Duty Post-Trip',
+      });
+    } else {
+      driverBIntervals.push({
+        status: 'ON_DUTY_NOT_DRIVING',
+        startMinutes: postTripStart,
+        durationMinutes: 20,
+        location: destination,
+        remark: 'Driver B: Consignee Post-Trip',
+      });
+      driverAIntervals.push({
+        status: 'OFF_DUTY',
+        startMinutes: postTripStart,
+        durationMinutes: 20,
+        location: destination,
+        remark: 'Driver A: Off Duty Post-Trip',
+      });
     }
   } else {
     // Solo driving: Strictly adheres to 11-hr drive, 14-hr window, and 8-hr break rules
@@ -268,6 +561,34 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
   const totalOnDutyHours = Number((totalOnDutyMinutes / 60).toFixed(1));
   const totalRestHours = Number((totalRestMinutes / 60).toFixed(1));
 
+  let isLegal = false;
+  let violations: HosViolation[] = [];
+
+  if (driverMode === 'team') {
+    // Audit both Driver A and Driver B separately for team operations
+    const auditA = auditDutyIntervals(driverAIntervals);
+    const auditB = auditDutyIntervals(driverBIntervals);
+    isLegal = auditA.isCompliant && auditB.isCompliant;
+    violations = [...auditA.violations, ...auditB.violations];
+  } else {
+    // Convert waypoints into continuous DutyIntervals and validate through the independent HOS engine
+    const dutyIntervals: DutyInterval[] = [];
+    let t = 0;
+    for (const wp of waypoints) {
+      dutyIntervals.push({
+        status: wp.dutyStatus,
+        startMinutes: t,
+        durationMinutes: wp.durationMinutes,
+        location: wp.location,
+        remark: wp.title,
+      });
+      t += wp.durationMinutes;
+    }
+    const audit = auditDutyIntervals(dutyIntervals);
+    isLegal = audit.isCompliant;
+    violations = audit.violations;
+  }
+
   return {
     origin,
     destination,
@@ -280,10 +601,12 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
     totalRestHours,
     mandatorySleeperCount: sleeperCount,
     mandatory30mBreakCount: breakCount,
-    isLegal: violations.length === 0,
+    isLegal,
     violations,
     waypoints,
     earliestLegalDeliveryEtaHours: totalTransitHours,
-    complianceSummary: `100% FMCSA Compliant corridor itinerary with ${sleeperCount} mandatory sleeper layovers and ${breakCount} 30-min rest breaks.`,
+    complianceSummary: isLegal
+      ? `Feasible FMCSA Part 395 corridor scenario with ${sleeperCount} sleeper layover(s) and ${breakCount} 30-min break(s).`
+      : `HOS Compliance Violations Detected (${violations.length} issue(s)): Itinerary violates statutory rules.`,
   };
 }

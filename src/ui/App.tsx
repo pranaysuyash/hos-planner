@@ -12,10 +12,14 @@ export const App: React.FC = () => {
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>(source ? 'custom' : 'chi-dal');
   const [origin, setOrigin] = useState<string>(() => {
+    if (params.get('origin')) return params.get('origin')!;
     if (params.get('locationCity')) return `${params.get('locationCity')}, ${params.get('locationState') || 'US'}`;
     return 'Chicago, IL';
   });
-  const [destination, setDestination] = useState<string>('Dallas, TX');
+  const [destination, setDestination] = useState<string>(() => {
+    if (params.get('destination')) return params.get('destination')!;
+    return 'Dallas, TX';
+  });
   const [distanceMiles, setDistanceMiles] = useState<number>(() => {
     const m = Number(params.get('miles'));
     return m > 0 ? m : 925;
@@ -24,8 +28,12 @@ export const App: React.FC = () => {
     const s = Number(params.get('speed')) || Number(params.get('speedMph'));
     return s > 0 ? s : 55;
   });
-  const [driverMode, setDriverMode] = useState<'solo' | 'team'>('solo');
+  const [driverMode, setDriverMode] = useState<'solo' | 'team'>(() => {
+    const dm = params.get('driverMode');
+    return dm === 'team' ? 'team' : 'solo';
+  });
   const [activeTimeHours, setActiveTimeHours] = useState<number>(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
 
   const [importedBanner, setImportedBanner] = useState<{ title: string; subtitle: string; source: string } | null>(() => {
     if (source === 'asset_studio_p04') {
@@ -68,41 +76,84 @@ export const App: React.FC = () => {
     });
   }, [origin, destination, distanceMiles, avgSpeedMph, driverMode]);
 
-  // Transform first 24 hours of itinerary waypoints into 24-hr duty intervals for the logbook grid
-  const dutyIntervals: DutyInterval[] = useMemo(() => {
+  // Transform entire itinerary waypoints into continuous DutyIntervals
+  const allDutyIntervals: DutyInterval[] = useMemo(() => {
     const intervals: DutyInterval[] = [];
     let currentStart = 0;
 
     for (const wp of itinerary.waypoints) {
-      if (currentStart >= 1440) break; // First 24h cycle
-      const duration = Math.min(wp.durationMinutes, 1440 - currentStart);
       intervals.push({
         status: wp.dutyStatus,
         startMinutes: currentStart,
-        durationMinutes: duration,
+        durationMinutes: wp.durationMinutes,
         location: wp.location,
         remark: wp.title,
       });
-      currentStart += duration;
+      currentStart += wp.durationMinutes;
+    }
+
+    return intervals;
+  }, [itinerary]);
+
+  // Full itinerary audit across all days
+  const audit = useMemo(() => {
+    return auditDutyIntervals(allDutyIntervals);
+  }, [allDutyIntervals]);
+
+  // Total calendar/transit days in the plan
+  const totalDays = useMemo(() => {
+    const totalMinutes = allDutyIntervals.reduce((sum, it) => sum + it.durationMinutes, 0);
+    return Math.max(1, Math.ceil(totalMinutes / 1440));
+  }, [allDutyIntervals]);
+
+  // Slice intervals for the currently selected day (0-24h window)
+  const activeDayIntervals: DutyInterval[] = useMemo(() => {
+    const dayStartMin = selectedDayIndex * 1440;
+    const dayEndMin = (selectedDayIndex + 1) * 1440;
+    const dayIntervals: DutyInterval[] = [];
+
+    for (const it of allDutyIntervals) {
+      const itStart = it.startMinutes;
+      const itEnd = it.startMinutes + it.durationMinutes;
+
+      // Overlaps current day window
+      if (itEnd > dayStartMin && itStart < dayEndMin) {
+        const clampedStart = Math.max(itStart, dayStartMin);
+        const clampedEnd = Math.min(itEnd, dayEndMin);
+        const duration = clampedEnd - clampedStart;
+
+        dayIntervals.push({
+          status: it.status,
+          startMinutes: clampedStart - dayStartMin, // Relative to day midnight (0..1440)
+          durationMinutes: duration,
+          location: it.location,
+          remark: it.remark,
+        });
+      }
     }
 
     // Pad remaining 24h with sleeper berth or off duty if needed
-    if (currentStart < 1440) {
-      intervals.push({
+    const lastEnd = dayIntervals.length > 0
+      ? dayIntervals[dayIntervals.length - 1].startMinutes + dayIntervals[dayIntervals.length - 1].durationMinutes
+      : 0;
+
+    if (lastEnd < 1440) {
+      dayIntervals.push({
         status: 'OFF_DUTY',
-        startMinutes: currentStart,
-        durationMinutes: 1440 - currentStart,
+        startMinutes: lastEnd,
+        durationMinutes: 1440 - lastEnd,
         location: destination,
         remark: 'Post-Trip Rest & Off Duty',
       });
     }
 
-    return intervals;
-  }, [itinerary, destination]);
+    return dayIntervals;
+  }, [allDutyIntervals, selectedDayIndex, destination]);
 
-  const audit = useMemo(() => {
-    return auditDutyIntervals(dutyIntervals);
-  }, [dutyIntervals]);
+  const isCloud = typeof window !== 'undefined' && (window.location.hostname.includes('pages.dev') || window.location.hostname.includes('trucking.io'));
+  const p01Url = isCloud ? 'https://cargofit.pages.dev' : 'http://localhost:5173';
+  const p02Url = isCloud ? 'https://freightpricing.pages.dev' : 'http://localhost:5174';
+  const p04Url = isCloud ? 'https://fleetstudio.pages.dev' : 'http://localhost:5176';
 
   return (
     <main className="app-container">
@@ -114,22 +165,22 @@ export const App: React.FC = () => {
             <span className="badge badge-purple">Product 03</span>
             <span className="badge badge-emerald">
               <span className="live-pulse" />
-              FMCSA § 395 ELD Active
+              Scenario Estimator (Indicative)
             </span>
             <span className="badge badge-blue">Port 5175</span>
           </div>
           <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#f8fafc' }}>
-            HOS Compliance & Interstate Corridor Legality Planner
+            HOS Compliance &amp; Interstate Corridor Legality Planner
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
-            Automated statutory routing, ELD duty logs, mandatory 10h sleeper resets, and 30-min break scheduling.
+            Automated statutory routing, simulated duty logs, mandatory 10h sleeper resets, and 30-min break scheduling.
           </p>
         </div>
 
         {/* Cross-Product Bridge Navigation */}
         <div className="header-links">
           <a
-            href="http://localhost:5173/"
+            href={p01Url}
             target="_blank"
             rel="noreferrer"
             className="cross-link"
@@ -138,7 +189,7 @@ export const App: React.FC = () => {
             📦 Product 01: Cargo Fit ↗
           </a>
           <a
-            href="http://localhost:5174/"
+            href={p02Url}
             target="_blank"
             rel="noreferrer"
             className="cross-link"
@@ -147,7 +198,7 @@ export const App: React.FC = () => {
             💰 Product 02: Freight Pricing ↗
           </a>
           <a
-            href="http://localhost:5176/"
+            href={p04Url}
             target="_blank"
             rel="noreferrer"
             className="cross-link"
@@ -423,14 +474,56 @@ export const App: React.FC = () => {
           {/* Statutory Logbook Section */}
           <div className="card">
             <div className="card-title">
-              <span>Electronic Logging Device (ELD) 24-Hour Graph</span>
-              <span className={`badge ${audit.isCompliant ? 'badge-emerald' : 'badge-amber'}`}>
-                {audit.isCompliant ? '✓ 100% FMCSA Compliant' : '⚠ Audit Flags Detected'}
+              <span>24-Hour Duty Status Graph (Scenario Model)</span>
+              <span className={`badge ${audit.isCompliant ? 'badge-emerald' : 'badge-rose'}`} style={{ color: audit.isCompliant ? '#34d399' : '#f87171' }}>
+                {audit.isCompliant ? '✓ Feasible Under Modeled Rules' : `⚠ ${audit.violations.length} Violation(s) Detected`}
               </span>
             </div>
+
+            {/* Multi-Day Navigation Tabs if transit spans >24 hours */}
+            {totalDays > 1 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                {Array.from({ length: totalDays }).map((_, dIdx) => (
+                  <button
+                    key={dIdx}
+                    type="button"
+                    onClick={() => setSelectedDayIndex(dIdx)}
+                    style={{
+                      background: selectedDayIndex === dIdx ? '#38bdf8' : '#1e293b',
+                      color: selectedDayIndex === dIdx ? '#000000' : '#cbd5e1',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Day {dIdx + 1} (Hours {dIdx * 24}–{(dIdx + 1) * 24})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Violation Details Banner if detected */}
+            {!audit.isCompliant && audit.violations.length > 0 && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', padding: '10px 14px', marginBottom: '12px' }}>
+                <strong style={{ color: '#ef4444', fontSize: '13px' }}>Regulatory Violations Detected:</strong>
+                <ul style={{ margin: '6px 0 0 16px', padding: 0, fontSize: '12px', color: '#fca5a5' }}>
+                  {audit.violations.map((v, vIdx) => (
+                    <li key={vIdx} style={{ marginBottom: '4px' }}>
+                      <strong>{v.rule}:</strong> {v.message} <br />
+                      <span style={{ color: '#94a3b8' }}>Remedy: {v.statutoryRemedy}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <LogbookGrid
               driverName={driverMode === 'team' ? 'Team Lead / Co-Driver Swapping' : 'J. Doe (Commercial Solo)'}
-              intervals={dutyIntervals}
+              dateLabel={`Day ${selectedDayIndex + 1} of ${totalDays}`}
+              intervals={activeDayIntervals}
             />
           </div>
 
