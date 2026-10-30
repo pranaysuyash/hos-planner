@@ -618,5 +618,7 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
     complianceSummary: isLegal
       ? `Feasible FMCSA Part 395 corridor scenario with ${sleeperCount} sleeper layover(s) and ${breakCount} 30-min break(s).`
       : `HOS Compliance Violations Detected (${violations.length} issue(s)): Itinerary violates statutory rules.`,
+    driverAIntervals: driverMode === 'team' ? driverAIntervals : undefined,
+    driverBIntervals: driverMode === 'team' ? driverBIntervals : undefined,
   };
 }

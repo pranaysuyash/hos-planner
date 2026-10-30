@@ -79,6 +79,8 @@ export interface CorridorItineraryPlan {
 
   earliestLegalDeliveryEtaHours: number;
   complianceSummary: string;
+  driverAIntervals?: DutyInterval[];
+  driverBIntervals?: DutyInterval[];
 }
 
 export interface HOSAuditResult {

@@ -52,6 +52,7 @@ export const App: React.FC = () => {
     const dm = params.get('driverMode');
     return dm === 'team' ? 'team' : 'solo';
   });
+  const [activeTeamDriver, setActiveTeamDriver] = useState<'A' | 'B'>('A');
   const [activeTimeHours, setActiveTimeHours] = useState<number>(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
@@ -119,7 +120,12 @@ export const App: React.FC = () => {
   }, [selectedPresetId, itinerary.totalTransitHours, driverMode, itinerary.mandatorySleeperCount, itinerary.isLegal]);
 
   // Transform entire itinerary waypoints into continuous DutyIntervals
-  const allDutyIntervals: DutyInterval[] = useMemo(() => intervalsForPlan(itinerary), [itinerary]);
+  const allDutyIntervals: DutyInterval[] = useMemo(() => {
+    if (driverMode === 'team' && itinerary.driverAIntervals && itinerary.driverBIntervals) {
+      return activeTeamDriver === 'A' ? itinerary.driverAIntervals : itinerary.driverBIntervals;
+    }
+    return intervalsForPlan(itinerary);
+  }, [itinerary, driverMode, activeTeamDriver]);
 
   // Full itinerary audit across all days
   const audit = useMemo(() => {
@@ -589,8 +595,49 @@ export const App: React.FC = () => {
               </div>
             )}
 
+            {driverMode === 'team' && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTeamDriver('A')}
+                  style={{
+                    background: activeTeamDriver === 'A' ? '#0284c7' : '#1e293b',
+                    color: '#fff',
+                    border: '1px solid #38bdf8',
+                    borderRadius: '4px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Driver A (Primary Operator)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTeamDriver('B')}
+                  style={{
+                    background: activeTeamDriver === 'B' ? '#0284c7' : '#1e293b',
+                    color: '#fff',
+                    border: '1px solid #38bdf8',
+                    borderRadius: '4px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Driver B (Co-Driver / Relief)
+                </button>
+              </div>
+            )}
+
             <LogbookGrid
-              driverName={session?.shipment?.input.driverId ?? (driverMode === 'team' ? 'Scenario team rotation' : 'Scenario solo driver')}
+              driverName={
+                driverMode === 'team'
+                  ? `Team Driver ${activeTeamDriver} (${activeTeamDriver === 'A' ? 'Primary' : 'Relief'})`
+                  : (session?.shipment?.input.driverId ?? 'Scenario solo driver')
+              }
               dateLabel={`Day ${selectedDayIndex + 1} of ${totalDays}`}
               intervals={activeDayIntervals}
             />
