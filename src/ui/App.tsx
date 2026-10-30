@@ -1,12 +1,32 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { POPULAR_CORRIDORS, planCorridorItinerary, type RoutePreset } from '../engine/corridor';
 import { auditDutyIntervals } from '../engine/hos';
-import type { DutyInterval } from '../engine/types';
+import type { DutyInterval, CorridorItineraryPlan } from '../engine/types';
+import { platformBus } from '../engine/platformBus';
 import { LogbookGrid } from './LogbookGrid';
 import { Realtime3DCorridor } from './Realtime3DCorridor';
 import { SuiteDock } from './SuiteDock';
+import {
+  IconPackage,
+  IconHighway,
+  IconCoffee,
+  IconBed,
+  IconFuel,
+  IconFlag,
+  IconMapPin,
+} from './icons';
+import { EldAuditModal } from './EldAuditModal';
+import { SplitSleeperModal } from './SplitSleeperModal';
+import { HosExemptionsModal } from './HosExemptionsModal';
+import { useShipmentSession } from '../suite/ShipmentSession';
+import { useShipmentDraft } from '../suite/useShipmentDraft';
+import { StructuredValue } from '../suite/ShipmentInspector';
+import { dutyForShipment, intervalsForPlan, resultForDutyPlan, validateDutyDraft } from '../engine/shipmentAdapter';
 
 export const App: React.FC = () => {
+  const session = useShipmentSession();
+  const [priorRestHours, setPriorRestHours] = useState(10);
+  const [publicationMessage, setPublicationMessage] = useState('');
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const source = params.get('source');
 
@@ -34,6 +54,17 @@ export const App: React.FC = () => {
   });
   const [activeTimeHours, setActiveTimeHours] = useState<number>(0);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [isSplitSleeperModalOpen, setIsSplitSleeperModalOpen] = useState<boolean>(false);
+  const [isExemptionsModalOpen, setIsExemptionsModalOpen] = useState<boolean>(false);
+  const nativeInputs = { origin, destination, distanceMiles, avgSpeedMph, driverMode, priorRestHours };
+  const draft = useShipmentDraft({ value: nativeInputs, importValue: dutyForShipment, applyValue: next => {
+    setSelectedPresetId('custom'); setOrigin(next.origin); setDestination(next.destination);
+    setDistanceMiles(next.distanceMiles); setAvgSpeedMph(next.avgSpeedMph); setDriverMode(next.driverMode); setPriorRestHours(next.priorRestHours);
+    setSelectedDayIndex(0); setActiveTimeHours(0); setPublicationMessage('');
+  } });
+  const inputError = validateDutyDraft(nativeInputs);
+
 
   const [importedBanner, setImportedBanner] = useState<{ title: string; subtitle: string; source: string } | null>(() => {
     if (source === 'asset_studio_p04') {
@@ -67,6 +98,7 @@ export const App: React.FC = () => {
 
   // Compute legal corridor itinerary
   const itinerary = useMemo(() => {
+    if (inputError) return { origin, destination, totalDistanceMiles: 0, avgSpeedMph: 0, driverMode, totalTransitHours: 0, pureDrivingHours: 0, totalOnDutyHours: 0, totalRestHours: 0, mandatorySleeperCount: 0, mandatory30mBreakCount: 0, isLegal: false, violations: [], waypoints: [], earliestLegalDeliveryEtaHours: 0, complianceSummary: inputError } satisfies CorridorItineraryPlan;
     return planCorridorItinerary({
       origin,
       destination,
@@ -74,31 +106,30 @@ export const App: React.FC = () => {
       avgSpeedMph,
       driverMode,
     });
-  }, [origin, destination, distanceMiles, avgSpeedMph, driverMode]);
+  }, [origin, destination, distanceMiles, avgSpeedMph, driverMode, inputError]);
+
+  useEffect(() => {
+    platformBus.publish('HOS_SCHEDULE_UPDATED', {
+      corridorId: selectedPresetId,
+      totalTransitHours: itinerary.totalTransitHours,
+      driverMode,
+      layoverCount: itinerary.mandatorySleeperCount,
+      isLegal: itinerary.isLegal,
+    });
+  }, [selectedPresetId, itinerary.totalTransitHours, driverMode, itinerary.mandatorySleeperCount, itinerary.isLegal]);
 
   // Transform entire itinerary waypoints into continuous DutyIntervals
-  const allDutyIntervals: DutyInterval[] = useMemo(() => {
-    const intervals: DutyInterval[] = [];
-    let currentStart = 0;
-
-    for (const wp of itinerary.waypoints) {
-      intervals.push({
-        status: wp.dutyStatus,
-        startMinutes: currentStart,
-        durationMinutes: wp.durationMinutes,
-        location: wp.location,
-        remark: wp.title,
-      });
-      currentStart += wp.durationMinutes;
-    }
-
-    return intervals;
-  }, [itinerary]);
+  const allDutyIntervals: DutyInterval[] = useMemo(() => intervalsForPlan(itinerary), [itinerary]);
 
   // Full itinerary audit across all days
   const audit = useMemo(() => {
-    return auditDutyIntervals(allDutyIntervals);
-  }, [allDutyIntervals]);
+    return inputError ? { isCompliant: false, violations: [], totalDrivingMinutes: 0, totalOnDutyMinutes: 0, totalOffDutyMinutes: 0 } : auditDutyIntervals(allDutyIntervals);
+  }, [allDutyIntervals, inputError]);
+  const reviewed = useMemo(() => {
+    if (!session?.shipment) return null;
+    try { return { result: resultForDutyPlan(session.shipment, nativeInputs, itinerary, audit), error: '' }; }
+    catch (error) { return { result: null, error: error instanceof Error ? error.message : 'Duty plan cannot be published.' }; }
+  }, [session?.shipment, origin, destination, distanceMiles, avgSpeedMph, driverMode, priorRestHours, itinerary, audit]);
 
   // Total calendar/transit days in the plan
   const totalDays = useMemo(() => {
@@ -150,14 +181,25 @@ export const App: React.FC = () => {
     return dayIntervals;
   }, [allDutyIntervals, selectedDayIndex, destination]);
 
-  const isCloud = typeof window !== 'undefined' && (window.location.hostname.includes('pages.dev') || window.location.hostname.includes('trucking.io'));
-  const p01Url = isCloud ? 'https://cargofit.pages.dev' : 'http://localhost:5173';
-  const p02Url = isCloud ? 'https://freightpricing.pages.dev' : 'http://localhost:5174';
-  const p04Url = isCloud ? 'https://fleetstudio.pages.dev' : 'http://localhost:5176';
-
   return (
-    <main className="app-container">
+    <main id="main-content" className="app-container">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <SuiteDock currentProductId="product-03-hos-planner" />
+      {session?.selectedId && <section className="shipment-native-panel" aria-label="Shipment duty task">
+        <div className="shipment-native-heading"><div><span className="shipment-native-kicker">DUTY DECISION</span><h2>{itinerary.totalTransitHours} modeled transit hours</h2></div><span>{draft.dirty ? 'Local assumptions changed' : 'Reviewed shared assumptions'}</span></div>
+        <p>{origin} → {destination} · {distanceMiles} mi · {avgSpeedMph} mph · {driverMode} · {priorRestHours} h declared prior rest</p>
+        <div className="shipment-task-buttons">
+          <button className="shipment-primary" disabled={!draft.canPublish || !reviewed?.result} onClick={async () => { if (!reviewed?.result || !draft.basis) return; const next = await session.submit('evaluate', { stage: 'hos', result: reviewed.result }, draft.basis.revision); if (next) { draft.acknowledge(next, nativeInputs); setPublicationMessage('Exact reviewed duty assumptions, itinerary and audit saved to the scenario.'); } }}>Publish reviewed duty plan</button>
+          <button onClick={() => session.inspect('stage:hos')}>Saved duty details</button>
+          <button disabled={session.busy || !session.online} onClick={draft.loadCurrent}>Load current shared inputs</button>
+          <a href={session.productUrl('command-center-portal')}>Review dispatch readiness</a>
+        </div>
+        <p role="status">{session.shipment?.status !== 'draft' ? 'Planning is locked after dispatch. Saved duty evidence remains inspectable; local studies do not change it.' : draft.incoming ? 'The shipment changed. Your local duty draft is retained. Load current shared inputs before publishing.' : draft.error || reviewed?.error || publicationMessage || (session.online ? 'Connected publication supports the canonical lane and solo full-rest declaration. Speed is saved exactly as reviewed.' : 'Offline local duty study. Reconnect and load shared inputs before publishing.')}</p>
+        <details className="shipment-draft-fields"><summary>Reviewed itinerary, audit, assumptions and source</summary><StructuredValue value={reviewed?.result?.details ?? { nativeInputs, itinerary, audit }} /></details>
+      </section>}
+      {!session?.selectedId && <p className="native-local-note">{draft.detached ? 'Detached local duty study. Inputs are retained; edits do not update the shared shipment.' : 'Independent duty planner. Presets, team exploration and modeled logs remain available without a shared shipment.'}</p>}
+      {inputError && <p className="native-input-error" role="alert">{inputError}</p>}
+      <p style={{ padding: '12px 20px' }}>Planning simulation using full ten-hour rest resets. Split-sleeper pairing and live ELD history are not supported; confirm operational decisions with the assigned driver and source records.</p>
       {/* Top Header */}
       <header className="app-header">
         <div>
@@ -175,38 +217,6 @@ export const App: React.FC = () => {
           <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
             Automated statutory routing, simulated duty logs, mandatory 10h sleeper resets, and 30-min break scheduling.
           </p>
-        </div>
-
-        {/* Cross-Product Bridge Navigation */}
-        <div className="header-links">
-          <a
-            href={p01Url}
-            target="_blank"
-            rel="noreferrer"
-            className="cross-link"
-            title="Open Product 01: Cargo Fit & 3D Load Optimization"
-          >
-            📦 Product 01: Cargo Fit ↗
-          </a>
-          <a
-            href={p02Url}
-            target="_blank"
-            rel="noreferrer"
-            className="cross-link"
-            title="Open Product 02: Freight Pricing & Telemetry HUD"
-          >
-            💰 Product 02: Freight Pricing ↗
-          </a>
-          <a
-            href={p04Url}
-            target="_blank"
-            rel="noreferrer"
-            className="cross-link"
-            style={{ borderColor: '#38bdf8', color: '#38bdf8' }}
-            title="Open Product 04: Fleet & Cargo Asset Studio"
-          >
-            🚛 Product 04: Asset Studio ↗
-          </a>
         </div>
       </header>
 
@@ -341,11 +351,12 @@ export const App: React.FC = () => {
       </div>
 
       {/* Realtime 3D Isometric Corridor Digital Twin */}
-      <Realtime3DCorridor
+      <details className="native-secondary-view" open={!session?.selectedId}><summary>Corridor simulation and timeline</summary>
+      {!inputError && <Realtime3DCorridor
         plan={itinerary}
         activeTimeHours={activeTimeHours}
         onTimeChange={setActiveTimeHours}
-      />
+      />}</details>
 
       {/* Main Two-Column View */}
       <div className="main-grid">
@@ -445,6 +456,11 @@ export const App: React.FC = () => {
             </select>
           </div>
 
+          <div className="form-group">
+            <label htmlFor="prior-rest-hours">Declared prior full rest (hours)</label>
+            <input id="prior-rest-hours" type="number" min="10" value={priorRestHours} onChange={event => setPriorRestHours(Number(event.target.value))} />
+            <p>This model assumes a full reset. Connected changes to the declaration belong to the shipment manifest.</p>
+          </div>
           {/* Summary Box */}
           <div style={{ marginTop: '16px', padding: '12px', background: '#0f172a', borderRadius: '8px', border: '1px solid #1e293b' }}>
             <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px' }}>
@@ -473,11 +489,64 @@ export const App: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Statutory Logbook Section */}
           <div className="card">
-            <div className="card-title">
-              <span>24-Hour Duty Status Graph (Scenario Model)</span>
-              <span className={`badge ${audit.isCompliant ? 'badge-emerald' : 'badge-rose'}`} style={{ color: audit.isCompliant ? '#34d399' : '#f87171' }}>
-                {audit.isCompliant ? '✓ Feasible Under Modeled Rules' : `⚠ ${audit.violations.length} Violation(s) Detected`}
-              </span>
+            <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>24-Hour Duty Status Graph (Scenario Model)</span>
+                <span className={`badge ${audit.isCompliant ? 'badge-emerald' : 'badge-rose'}`} style={{ color: audit.isCompliant ? '#34d399' : '#f87171' }}>
+                  {inputError ? 'Correct invalid scenario inputs' : audit.isCompliant ? 'Feasible Under Modeled Rules' : `${audit.violations.length} Violation(s) Detected`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsSplitSleeperModalOpen(true)}
+                  style={{
+                    background: '#334155',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Split Sleeper &amp; 8-Day Recap 🛏️
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsExemptionsModalOpen(true)}
+                  style={{
+                    background: '#334155',
+                    color: '#34d399',
+                    border: '1px solid rgba(52, 211, 153, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Statutory Exemptions 🌾
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(inputError)}
+                  onClick={() => setIsAuditModalOpen(true)}
+                  style={{
+                    background: '#0284c7',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  View / Print Duty Planning Report
+                </button>
+              </div>
             </div>
 
             {/* Multi-Day Navigation Tabs if transit spans >24 hours */}
@@ -521,7 +590,7 @@ export const App: React.FC = () => {
             )}
 
             <LogbookGrid
-              driverName={driverMode === 'team' ? 'Team Lead / Co-Driver Swapping' : 'J. Doe (Commercial Solo)'}
+              driverName={session?.shipment?.input.driverId ?? (driverMode === 'team' ? 'Scenario team rotation' : 'Scenario solo driver')}
               dateLabel={`Day ${selectedDayIndex + 1} of ${totalDays}`}
               intervals={activeDayIntervals}
             />
@@ -550,13 +619,13 @@ export const App: React.FC = () => {
 
                 const getIconSymbol = () => {
                   switch (wp.type) {
-                    case 'ORIGIN_PICKUP': return '📦';
-                    case 'DRIVING_LEG': return '🛣️';
-                    case 'MANDATORY_30M_BREAK': return '☕';
-                    case 'SLEEPER_10H_REST': return '🛌';
-                    case 'FUEL_INSPECTION': return '⛽';
-                    case 'DESTINATION_DROPOFF': return '🏁';
-                    default: return '📍';
+                    case 'ORIGIN_PICKUP': return <IconPackage size={14} />;
+                    case 'DRIVING_LEG': return <IconHighway size={14} />;
+                    case 'MANDATORY_30M_BREAK': return <IconCoffee size={14} />;
+                    case 'SLEEPER_10H_REST': return <IconBed size={14} />;
+                    case 'FUEL_INSPECTION': return <IconFuel size={14} />;
+                    case 'DESTINATION_DROPOFF': return <IconFlag size={14} />;
+                    default: return <IconMapPin size={14} />;
                   }
                 };
 
@@ -582,6 +651,26 @@ export const App: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <EldAuditModal
+        plan={itinerary}
+        audit={audit}
+        driverMode={driverMode}
+        context={session?.shipment ? { shipmentReference: session.shipment.reference, driverId: session.shipment.input.driverId, carrierDot: session.shipment.input.carrierDot, equipmentId: session.shipment.input.equipmentId } : undefined}
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+      />
+
+      <SplitSleeperModal
+        isOpen={isSplitSleeperModalOpen}
+        onClose={() => setIsSplitSleeperModalOpen(false)}
+        driverMode={driverMode}
+      />
+
+      <HosExemptionsModal
+        isOpen={isExemptionsModalOpen}
+        onClose={() => setIsExemptionsModalOpen(false)}
+      />
     </main>
   );
 };

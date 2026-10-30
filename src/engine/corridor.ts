@@ -75,6 +75,16 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
     initialShiftHoursRemaining = HOS_LIMITS.MAX_ON_DUTY_HOURS_PER_SHIFT,
   } = opts;
 
+  // Every iteration must consume finite positive distance. Enforce this at the
+  // engine boundary as well as the UI, since adapters and bridges call it too.
+  if (![distanceMiles, avgSpeedMph, initialDrivingHoursRemaining, initialShiftHoursRemaining].every(Number.isFinite)
+    || distanceMiles <= 0 || avgSpeedMph <= 0 || distanceMiles / avgSpeedMph > 1000
+    || initialDrivingHoursRemaining < 0 || initialDrivingHoursRemaining > HOS_LIMITS.MAX_DRIVE_HOURS_PER_SHIFT
+    || initialShiftHoursRemaining < 0 || initialShiftHoursRemaining > HOS_LIMITS.MAX_ON_DUTY_HOURS_PER_SHIFT
+    || !['solo', 'team'].includes(driverMode)) {
+    throw new RangeError('Declare finite positive distance and speed, at most 1,000 driving hours, a supported driver mode and valid initial duty clocks.');
+  }
+
   const waypoints: HosWaypoint[] = [];
 
   let currentMile = 0;

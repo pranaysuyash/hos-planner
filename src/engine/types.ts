@@ -80,3 +80,11 @@ export interface CorridorItineraryPlan {
   earliestLegalDeliveryEtaHours: number;
   complianceSummary: string;
 }
+
+export interface HOSAuditResult {
+  isCompliant: boolean;
+  violations: HosViolation[];
+  totalDrivingMinutes: number;
+  totalOnDutyMinutes: number;
+  totalOffDutyMinutes: number;
+}

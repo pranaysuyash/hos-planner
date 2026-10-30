@@ -32,7 +32,8 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
   let shiftStartMinutes: number | null = null;
   let drivingSinceLastBreak = 0;
   let consecutiveOffDutyMinutes = 0;
-  let consecutiveSleeperMinutes = 0;
+  let consecutiveNonDrivingMinutes = 0;
+  let previousEndMinutes: number | null = null;
 
   // History buffer of on-duty minutes for rolling 8-day (192-hour) calculation
   const onDutyEvents: { timeMinutes: number; durationMinutes: number }[] = [];
@@ -44,11 +45,18 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
   for (let i = 0; i < intervals.length; i++) {
     const it = intervals[i];
     const dur = it.durationMinutes;
+    // An unrecorded gap cannot be silently counted as either rest or a break.
+    if (previousEndMinutes !== null && it.startMinutes !== previousEndMinutes) {
+      consecutiveNonDrivingMinutes = 0;
+      consecutiveOffDutyMinutes = 0;
+    }
+    previousEndMinutes = it.startMinutes + dur;
+    if (it.status === 'DRIVING') consecutiveNonDrivingMinutes = 0;
+    else consecutiveNonDrivingMinutes += dur;
 
     if (it.status === 'DRIVING') {
       totalDriving += dur;
       consecutiveOffDutyMinutes = 0;
-      consecutiveSleeperMinutes = 0;
 
       // Start shift window if not currently active
       if (shiftStartMinutes === null) {
@@ -100,7 +108,6 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
     } else if (it.status === 'ON_DUTY_NOT_DRIVING') {
       totalOnDuty += dur;
       consecutiveOffDutyMinutes = 0;
-      consecutiveSleeperMinutes = 0;
 
       if (shiftStartMinutes === null) {
         shiftStartMinutes = it.startMinutes;
@@ -110,30 +117,23 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
       onDutyEvents.push({ timeMinutes: it.startMinutes + dur, durationMinutes: dur });
 
       // If on-duty break >= 30m, satisfies 30-minute break rule under 2020 FMCSA rule reform
-      if (dur >= HOS_LIMITS.MIN_REST_BREAK_MINUTES) {
+      if (consecutiveNonDrivingMinutes >= HOS_LIMITS.MIN_REST_BREAK_MINUTES) {
         drivingSinceLastBreak = 0;
       }
     } else {
       // OFF_DUTY or SLEEPER_BERTH
       totalOffDuty += dur;
       consecutiveOffDutyMinutes += dur;
-      if (it.status === 'SLEEPER_BERTH') {
-        consecutiveSleeperMinutes += dur;
-      } else {
-        consecutiveSleeperMinutes = 0;
-      }
 
       // Rest >= 30m resets 30m break clock
-      if (dur >= HOS_LIMITS.MIN_REST_BREAK_MINUTES) {
+      if (consecutiveNonDrivingMinutes >= HOS_LIMITS.MIN_REST_BREAK_MINUTES) {
         drivingSinceLastBreak = 0;
       }
 
       // 10 consecutive hours off-duty resets the 11-hr drive cap and 14-consecutive-hour shift window (§ 395.3(a))
-      // Or qualifying sleeper berth period of >= 7 consecutive hours in sleeper berth (§ 395.1(g) 2020 sleeper split rule for team operations)
-      if (
-        consecutiveOffDutyMinutes >= HOS_LIMITS.MIN_CONSECUTIVE_OFF_DUTY_HOURS * 60 ||
-        consecutiveSleeperMinutes >= 7 * 60
-      ) {
+      // Split-sleeper pairing requires a separate history-aware rule evaluation.
+      // This conservative planner only grants a full reset after ten hours.
+      if (consecutiveOffDutyMinutes >= HOS_LIMITS.MIN_CONSECUTIVE_OFF_DUTY_HOURS * 60) {
         drivingMinutesInShift = 0;
         onDutyMinutesInShift = 0;
         shiftStartMinutes = null;

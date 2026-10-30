@@ -1,0 +1,28 @@
+.duty-report-dialog { border: 1px solid #cbd5e1; border-radius: 8px; padding: 0; width: min(900px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); color: #0f172a; background: #fff; overflow: auto; }
+.duty-report-dialog::backdrop { background: rgba(0, 0, 0, .75); }
+.duty-report-content { padding: 24px; font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-wrap: anywhere; }
+.duty-report-toolbar { display: flex; flex-wrap: wrap; align-items: start; gap: 12px; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 12px; }
+.duty-report-toolbar h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 8px; }
+.duty-report-toolbar h2:focus { outline: 2px solid #0284c7; outline-offset: 4px; }
+.duty-report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.duty-report-actions button { padding: 8px 12px; border: 1px solid #64748b; border-radius: 4px; background: #f1f5f9; color: #0f172a; cursor: pointer; }
+.duty-report-actions button:focus-visible { outline: 3px solid #0284c7; outline-offset: 2px; }
+.duty-report-scope { border: 1px solid #94a3b8; padding: 12px; background: #f1f5f9; }
+.duty-report-metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; }
+.duty-report-metadata dt { color: #475569; font-size: 11px; text-transform: uppercase; }
+.duty-report-metadata dd { margin: 0; font-weight: 600; }
+.duty-report-table { max-width: 100%; overflow-x: auto; margin: 16px 0; }
+.duty-report-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.duty-report-table caption { text-align: left; font-weight: 700; margin-bottom: 8px; }
+.duty-report-table th, .duty-report-table td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+.duty-report-table thead, .duty-report-table tr:last-child { background: #f1f5f9; }
+.duty-report-content footer { border-top: 1px solid #94a3b8; padding-top: 12px; font-size: 11px; }
+@media (max-width: 480px) { .duty-report-content { padding: 14px; } .duty-report-table table { min-width: 440px; } }
+@media print {
+  body > * { display: none !important; }
+  body > .duty-report-dialog { display: block !important; position: static !important; width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; margin: 0 !important; border: 0 !important; color: #000 !important; }
+  .duty-report-dialog .duty-report-actions { display: none !important; }
+  .duty-report-dialog .duty-report-content { padding: 0; }
+  .duty-report-dialog .duty-report-table { overflow: visible; }
+  .duty-report-dialog tr { break-inside: avoid; }
+}

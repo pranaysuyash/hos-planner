@@ -6,7 +6,7 @@
   "code": "P03",
   "version": "1.0.0",
   "port": 5175,
-  "icon": "⏱️",
+  "icon": "\u23f1\ufe0f",
   "description": "FMCSA Part 395 statutory hours of service engine, 24-hr ELD logbooks, and corridor simulations",
   "category": "compliance",
   "entitlementKey": "hos_planner",
@@ -16,11 +16,28 @@
   },
   "bridges": {
     "consumes": [
-      { "from": "product-04-asset-studio", "protocol": "OLAS-v1", "action": "ingest_vehicle_range" },
-      { "from": "product-05-fleet-telematics", "protocol": "TELEMATICS-v1", "action": "ingest_driver_duty_state" }
+      {
+        "from": "product-04-asset-studio",
+        "protocol": "OLAS-v1",
+        "action": "ingest_vehicle_range"
+      },
+      {
+        "from": "product-05-fleet-telematics",
+        "protocol": "TELEMATICS-v1",
+        "action": "ingest_driver_duty_state"
+      }
     ],
     "produces": [
-      { "to": "product-05-fleet-telematics", "protocol": "TELEMATICS-v1", "action": "verify_hos_limits" }
+      {
+        "to": "product-05-fleet-telematics",
+        "protocol": "TELEMATICS-v1",
+        "action": "verify_hos_limits"
+      }
     ]
+  },
+  "pricingTier": {
+    "tierName": "Safety & Compliance Suite",
+    "monthlyPriceUsd": 129,
+    "description": "FMCSA Part 395 statutory hours of service engine, 24-hr ELD logbooks, and corridor simulations"
   }
 }

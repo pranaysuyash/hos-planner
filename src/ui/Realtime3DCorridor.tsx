@@ -352,7 +352,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
           <span className="hud-tag">REALTIME 3D ISOMETRIC INTERSTATE CORRIDOR</span>
           <span className="live-pulse" />
           <span className="mono" style={{ fontSize: 12, color: '#38bdf8', fontWeight: 700 }}>
-            {plan.origin} ➔ {plan.destination} ({plan.totalDistanceMiles} MILES)
+            {plan.origin} &rarr; {plan.destination} ({plan.totalDistanceMiles} MILES)
           </span>
         </div>
 
@@ -364,7 +364,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
             onClick={snapIsometric}
             title="Snap to CAD Isometric Angle"
           >
-            📐 Isometric Lock
+            Isometric Lock
           </button>
           <button
             type="button"
@@ -373,7 +373,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
             onClick={() => setFollowTruck(f => !f)}
             title="Lock camera tracking directly onto the truck"
           >
-            🎯 {followTruck ? 'Free Camera' : 'Track Truck'}
+            {followTruck ? 'Free Camera' : 'Track Truck'}
           </button>
           <button
             type="button"
@@ -384,7 +384,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
               setIsPlaying(p => !p);
             }}
           >
-            {isPlaying ? '⏸ Pause Scrub' : '▶ Play Transit Simulation'}
+            {isPlaying ? 'Pause Scrub' : 'Play Transit Simulation'}
           </button>
         </div>
       </div>
@@ -407,7 +407,7 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
       <div style={{ marginTop: 14, padding: '12px 16px', background: '#070b14', borderRadius: 8, border: '1px solid #1e293b' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12 }}>
           <span style={{ color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            🛰️ FMCSA Corridor Transit Scrubbing: <strong className="mono" style={{ color: '#38bdf8' }}>T+{activeTimeHours.toFixed(1)} Hours</strong> / {totalHours}h
+            FMCSA Corridor Transit Scrubbing: <strong className="mono" style={{ color: '#38bdf8' }}>T+{activeTimeHours.toFixed(1)} Hours</strong> / {totalHours}h
           </span>
           <span className="mono" style={{ color: '#34d399', fontWeight: 700 }}>
             {Math.round(progressRatio * 100)}% Transit Completed
