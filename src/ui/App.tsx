@@ -18,6 +18,8 @@ import {
 import { EldAuditModal } from './EldAuditModal';
 import { SplitSleeperModal } from './SplitSleeperModal';
 import { HosExemptionsModal } from './HosExemptionsModal';
+import { HosRecapModal } from './HosRecapModal';
+import { CrossBorderHosModal } from './CrossBorderHosModal';
 import { useShipmentSession } from '../suite/ShipmentSession';
 import { useShipmentDraft } from '../suite/useShipmentDraft';
 import { StructuredValue } from '../suite/ShipmentInspector';
@@ -58,6 +60,8 @@ export const App: React.FC = () => {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [isSplitSleeperModalOpen, setIsSplitSleeperModalOpen] = useState<boolean>(false);
   const [isExemptionsModalOpen, setIsExemptionsModalOpen] = useState<boolean>(false);
+  const [isRecapModalOpen, setIsRecapModalOpen] = useState<boolean>(false);
+  const [isCrossBorderModalOpen, setIsCrossBorderModalOpen] = useState<boolean>(false);
   const nativeInputs = { origin, destination, distanceMiles, avgSpeedMph, driverMode, priorRestHours };
   const draft = useShipmentDraft({ value: nativeInputs, importValue: dutyForShipment, applyValue: next => {
     setSelectedPresetId('custom'); setOrigin(next.origin); setDestination(next.destination);
@@ -517,7 +521,23 @@ export const App: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  Split Sleeper &amp; 8-Day Recap 🛏️
+                  Split Sleeper 🛏️
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRecapModalOpen(true)}
+                  style={{
+                    background: '#334155',
+                    color: '#f59e0b',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  8-Day Recap &amp; Parking ⏱️
                 </button>
                 <button
                   type="button"
@@ -534,6 +554,22 @@ export const App: React.FC = () => {
                   }}
                 >
                   Statutory Exemptions 🌾
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCrossBorderModalOpen(true)}
+                  style={{
+                    background: '#334155',
+                    color: '#60a5fa',
+                    border: '1px solid rgba(96, 165, 250, 0.4)',
+                    borderRadius: '4px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cross-Border USMCA 🌐
                 </button>
                 <button
                   type="button"
@@ -717,6 +753,21 @@ export const App: React.FC = () => {
       <HosExemptionsModal
         isOpen={isExemptionsModalOpen}
         onClose={() => setIsExemptionsModalOpen(false)}
+      />
+
+      <HosRecapModal
+        isOpen={isRecapModalOpen}
+        onClose={() => setIsRecapModalOpen(false)}
+        plannedTripHours={itinerary.pureDrivingHours}
+      />
+
+      <CrossBorderHosModal
+        isOpen={isCrossBorderModalOpen}
+        onClose={() => setIsCrossBorderModalOpen(false)}
+        currentDrivingHours={itinerary.pureDrivingHours}
+        onSelectJurisdiction={(j) => {
+          setPublicationMessage(`Switched HOS jurisdiction to ${j}`);
+        }}
       />
     </main>
   );
