@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { POPULAR_CORRIDORS, planCorridorItinerary, type RoutePreset } from '../engine/corridor';
 import { auditDutyIntervals } from '../engine/hos';
 import type { DutyInterval, CorridorItineraryPlan } from '../engine/types';
-import { platformBus } from '../engine/platformBus';
+import { platformBus, hosScenarioPayload } from '../engine/platformBus';
 import { LogbookGrid } from './LogbookGrid';
 import { Realtime3DCorridor } from './Realtime3DCorridor';
 import { SuiteDock } from './SuiteDock';
@@ -16,6 +16,7 @@ import {
   IconMapPin,
 } from './icons';
 import { EldAuditModal } from './EldAuditModal';
+import { ScenarioClocks } from './ScenarioClocks';
 import { SplitSleeperModal } from './SplitSleeperModal';
 import { HosExemptionsModal } from './HosExemptionsModal';
 import { HosRecapModal } from './HosRecapModal';
@@ -82,12 +83,12 @@ export const App: React.FC = () => {
       };
     }
     if (source === 'product-05-telematics') {
-      const driver = params.get('driverName') || 'Assigned Driver';
-      const loc = `${params.get('locationCity') || 'En Route'}, ${params.get('locationState') || 'US'}`;
-      const status = params.get('currentDutyStatus') || 'DRIVING';
+      const driver = params.get('driverName') || 'Not supplied';
+      const loc = [params.get('locationCity'), params.get('locationState')].filter(Boolean).join(', ') || 'Not supplied';
+      const status = params.get('currentDutyStatus');
       return {
-        title: `Live Driver Telematics Stream from Product 05`,
-        subtitle: `Driver: ${driver} · Live GPS: ${loc} · Active Status: ${status.replace('_', ' ').toUpperCase()}`,
+        title: `Scenario data imported from Product 05`,
+        subtitle: `Driver: ${driver} · Location: ${loc} · Status: ${status ? status.replace('_', ' ').toUpperCase() : 'Not supplied'} · Source and freshness unverified`,
         source: 'P05',
       };
     }
@@ -103,7 +104,7 @@ export const App: React.FC = () => {
 
   // Compute legal corridor itinerary
   const itinerary = useMemo(() => {
-    if (inputError) return { origin, destination, totalDistanceMiles: 0, avgSpeedMph: 0, driverMode, totalTransitHours: 0, pureDrivingHours: 0, totalOnDutyHours: 0, totalRestHours: 0, mandatorySleeperCount: 0, mandatory30mBreakCount: 0, isLegal: false, violations: [], waypoints: [], earliestLegalDeliveryEtaHours: 0, complianceSummary: inputError } satisfies CorridorItineraryPlan;
+    if (inputError) return { origin, destination, totalDistanceMiles: 0, avgSpeedMph: 0, driverMode, totalTransitHours: 0, pureDrivingHours: 0, totalOnDutyHours: 0, totalRestHours: 0, mandatorySleeperCount: 0, mandatory30mBreakCount: 0, assessment: 'indeterminate', assessmentReasons: [inputError], isLegal: false, violations: [], waypoints: [], earliestLegalDeliveryEtaHours: 0, complianceSummary: inputError } satisfies CorridorItineraryPlan;
     return planCorridorItinerary({
       origin,
       destination,
@@ -114,14 +115,8 @@ export const App: React.FC = () => {
   }, [origin, destination, distanceMiles, avgSpeedMph, driverMode, inputError]);
 
   useEffect(() => {
-    platformBus.publish('HOS_SCHEDULE_UPDATED', {
-      corridorId: selectedPresetId,
-      totalTransitHours: itinerary.totalTransitHours,
-      driverMode,
-      layoverCount: itinerary.mandatorySleeperCount,
-      isLegal: itinerary.isLegal,
-    });
-  }, [selectedPresetId, itinerary.totalTransitHours, driverMode, itinerary.mandatorySleeperCount, itinerary.isLegal]);
+    platformBus.publish('HOS_SCHEDULE_UPDATED', hosScenarioPayload(selectedPresetId, itinerary), { senderProduct: 'product-03-hos-planner', senderPort: 5175 });
+  }, [selectedPresetId, itinerary]);
 
   // Transform entire itinerary waypoints into continuous DutyIntervals
   const allDutyIntervals: DutyInterval[] = useMemo(() => {
@@ -133,7 +128,7 @@ export const App: React.FC = () => {
 
   // Full itinerary audit across all days
   const audit = useMemo(() => {
-    return inputError ? { isCompliant: false, violations: [], totalDrivingMinutes: 0, totalOnDutyMinutes: 0, totalOffDutyMinutes: 0 } : auditDutyIntervals(allDutyIntervals);
+    return inputError ? { assessment: 'indeterminate' as const, assessmentReasons: [inputError], shiftChecksPassed: null, cycleAssessment: 'indeterminate' as const, cycleIllustration: null, isCompliant: false, violations: [], totalDrivingMinutes: null, totalOnDutyMinutes: null, totalOffDutyMinutes: null } : auditDutyIntervals(allDutyIntervals);
   }, [allDutyIntervals, inputError]);
   const reviewed = useMemo(() => {
     if (!session?.shipment) return null;
@@ -173,23 +168,8 @@ export const App: React.FC = () => {
       }
     }
 
-    // Pad remaining 24h with sleeper berth or off duty if needed
-    const lastEnd = dayIntervals.length > 0
-      ? dayIntervals[dayIntervals.length - 1].startMinutes + dayIntervals[dayIntervals.length - 1].durationMinutes
-      : 0;
-
-    if (lastEnd < 1440) {
-      dayIntervals.push({
-        status: 'OFF_DUTY',
-        startMinutes: lastEnd,
-        durationMinutes: 1440 - lastEnd,
-        location: destination,
-        remark: 'Post-Trip Rest & Off Duty',
-      });
-    }
-
     return dayIntervals;
-  }, [allDutyIntervals, selectedDayIndex, destination]);
+  }, [allDutyIntervals, selectedDayIndex]);
 
   return (
     <main id="main-content" className="app-container">
@@ -199,15 +179,15 @@ export const App: React.FC = () => {
         <div className="shipment-native-heading"><div><span className="shipment-native-kicker">DUTY DECISION</span><h2>{itinerary.totalTransitHours} modeled transit hours</h2></div><span>{draft.dirty ? 'Local assumptions changed' : 'Reviewed shared assumptions'}</span></div>
         <p>{origin} → {destination} · {distanceMiles} mi · {avgSpeedMph} mph · {driverMode} · {priorRestHours} h declared prior rest</p>
         <div className="shipment-task-buttons">
-          <button className="shipment-primary" disabled={!draft.canPublish || !reviewed?.result} onClick={async () => { if (!reviewed?.result || !draft.basis) return; const next = await session.submit('evaluate', { stage: 'hos', result: reviewed.result }, draft.basis.revision); if (next) { draft.acknowledge(next, nativeInputs); setPublicationMessage('Exact reviewed duty assumptions, itinerary and audit saved to the scenario.'); } }}>Publish reviewed duty plan</button>
+          <button className="shipment-primary" disabled={!draft.canPublish || !reviewed?.result} onClick={async () => { if (!reviewed?.result || !draft.basis) return; const next = await session.submit('evaluate', { stage: 'hos', result: reviewed.result }, draft.basis.revision); if (next) { draft.acknowledge(next, nativeInputs); setPublicationMessage('Modeled duty review saved. Cycle status remains indeterminate and dispatch remains blocked.'); } }}>Save modeled duty review</button>
           <button onClick={() => session.inspect('stage:hos')}>Saved duty details</button>
           <button disabled={session.busy || !session.online} onClick={draft.loadCurrent}>Load current shared inputs</button>
           <a href={session.productUrl('command-center-portal')}>Review dispatch readiness</a>
         </div>
-        <p role="status">{session.shipment?.status !== 'draft' ? 'Planning is locked after dispatch. Saved duty evidence remains inspectable; local studies do not change it.' : draft.incoming ? 'The shipment changed. Your local duty draft is retained. Load current shared inputs before publishing.' : draft.error || reviewed?.error || publicationMessage || (session.online ? 'Connected publication supports the canonical lane and solo full-rest declaration. Speed is saved exactly as reviewed.' : 'Offline local duty study. Reconnect and load shared inputs before publishing.')}</p>
+        <p role="status">{session.shipment?.status !== 'draft' ? 'Planning is locked after dispatch. Saved duty evidence remains inspectable; local calculations do not change it.' : draft.incoming ? 'The shipment changed. Your local duty draft is retained. Load current shared inputs before saving.' : draft.error || reviewed?.error || publicationMessage || (session.online ? 'Save the current lane and solo full-rest calculation as a review. Cycle history is unavailable; this does not authorize dispatch.' : 'Offline duty workspace. Reconnect and load shared inputs before saving.')}</p>
         <details className="shipment-draft-fields"><summary>Reviewed itinerary, audit, assumptions and source</summary><StructuredValue value={reviewed?.result?.details ?? { nativeInputs, itinerary, audit }} /></details>
       </section>}
-      {!session?.selectedId && <p className="native-local-note">{draft.detached ? 'Detached local duty study. Inputs are retained; edits do not update the shared shipment.' : 'Independent duty planner. Presets, team exploration and modeled logs remain available without a shared shipment.'}</p>}
+      {!session?.selectedId && <p className="native-local-note">{draft.detached ? 'Local duty workspace. Inputs are retained; edits do not update the shared shipment.' : 'Independent duty planner. Presets, team planning and modeled logs remain available without a shared shipment.'}</p>}
       {inputError && <p className="native-input-error" role="alert">{inputError}</p>}
       <p style={{ padding: '12px 20px' }}>Planning simulation using full ten-hour rest resets. Split-sleeper pairing and live ELD history are not supported; confirm operational decisions with the assigned driver and source records.</p>
       {/* Top Header */}
@@ -225,7 +205,7 @@ export const App: React.FC = () => {
             HOS Compliance &amp; Interstate Corridor Legality Planner
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
-            Automated statutory routing, simulated duty logs, mandatory 10h sleeper resets, and 30-min break scheduling.
+            Scenario routing with simulated duty logs, full-rest assumptions, and modeled break scheduling.
           </p>
         </div>
       </header>
@@ -276,89 +256,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* FMCSA Clocks Banner */}
-      <div className="clocks-grid">
-        <div className="clock-card">
-          <div className="clock-title">
-            <span>11-Hour Drive Clock</span>
-            <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800 }}>
-              {driverMode === 'team' ? 'TEAM EXPEDITED' : 'SOLO CAP'}
-            </span>
-          </div>
-          <div className="clock-value">
-            {driverMode === 'team' ? '11.0' : Math.max(0, 11 - (itinerary.pureDrivingHours % 11)).toFixed(1)}
-            <span>/ 11.0 hrs</span>
-          </div>
-          <div className="clock-bar-bg">
-            <div
-              className="clock-bar-fill"
-              style={{
-                width: `${driverMode === 'team' ? 100 : Math.min(100, ((11 - (itinerary.pureDrivingHours % 11)) / 11) * 100)}%`,
-                backgroundColor: '#38bdf8',
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="clock-card">
-          <div className="clock-title">
-            <span>14-Hour Shift Window</span>
-            <span style={{ fontSize: '10px', color: '#c084fc', fontWeight: 800 }}>
-              {driverMode === 'team' ? 'CONTINUOUS' : 'WINDOW CAP'}
-            </span>
-          </div>
-          <div className="clock-value">
-            {driverMode === 'team' ? '14.0' : Math.max(0, 14 - ((itinerary.pureDrivingHours + itinerary.totalOnDutyHours) % 14)).toFixed(1)}
-            <span>/ 14.0 hrs</span>
-          </div>
-          <div className="clock-bar-bg">
-            <div
-              className="clock-bar-fill"
-              style={{
-                width: `${driverMode === 'team' ? 100 : Math.min(100, ((14 - ((itinerary.pureDrivingHours + itinerary.totalOnDutyHours) % 14)) / 14) * 100)}%`,
-                backgroundColor: '#c084fc',
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="clock-card">
-          <div className="clock-title">
-            <span>30-Min Rest Break</span>
-            <span style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 800 }}>8H TRIGGER</span>
-          </div>
-          <div className="clock-value">
-            {driverMode === 'team' ? '8.0' : '8.0'}
-            <span>/ 8.0 hrs max</span>
-          </div>
-          <div className="clock-bar-bg">
-            <div
-              className="clock-bar-fill"
-              style={{ width: '100%', backgroundColor: '#fbbf24' }}
-            />
-          </div>
-        </div>
-
-        <div className="clock-card">
-          <div className="clock-title">
-            <span>70-Hour / 8-Day Cycle</span>
-            <span style={{ fontSize: '10px', color: '#34d399', fontWeight: 800 }}>STATUTORY OK</span>
-          </div>
-          <div className="clock-value">
-            {Math.max(0, 70 - itinerary.pureDrivingHours - itinerary.totalOnDutyHours).toFixed(1)}
-            <span>/ 70.0 hrs</span>
-          </div>
-          <div className="clock-bar-bg">
-            <div
-              className="clock-bar-fill"
-              style={{
-                width: `${Math.max(10, ((70 - itinerary.pureDrivingHours) / 70) * 100)}%`,
-                backgroundColor: '#34d399',
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      <ScenarioClocks />
 
       {/* Realtime 3D Isometric Corridor Digital Twin */}
       <details className="native-secondary-view" open={!session?.selectedId}><summary>Corridor simulation and timeline</summary>
@@ -502,8 +400,8 @@ export const App: React.FC = () => {
             <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span>24-Hour Duty Status Graph (Scenario Model)</span>
-                <span className={`badge ${audit.isCompliant ? 'badge-emerald' : 'badge-rose'}`} style={{ color: audit.isCompliant ? '#34d399' : '#f87171' }}>
-                  {inputError ? 'Correct invalid scenario inputs' : audit.isCompliant ? 'Feasible Under Modeled Rules' : `${audit.violations.length} Violation(s) Detected`}
+                <span className={`badge ${itinerary.assessment === 'modeled' && itinerary.isLegal && audit.assessment === 'modeled' && audit.isCompliant ? 'badge-emerald' : 'badge-rose'}`} style={{ color: itinerary.assessment === 'modeled' && itinerary.isLegal && audit.assessment === 'modeled' && audit.isCompliant ? '#34d399' : '#f87171' }}>
+                  {itinerary.assessment === 'indeterminate' || audit.assessment === 'indeterminate' ? 'Overall duty status unavailable' : itinerary.isLegal && audit.isCompliant ? 'Feasible Under Modeled Rules' : 'Model findings detected'}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>

@@ -16,8 +16,8 @@ const ROWS: { id: DutyStatus; label: string; short: string; color: string; y: nu
 ];
 
 export const LogbookGrid: React.FC<LogbookGridProps> = ({
-  dateLabel = new Date().toISOString().split('T')[0],
-  driverName = 'J. Doe (Commercial Solo)',
+  dateLabel = 'Scenario day, date not supplied',
+  driverName = 'Scenario driver, identity not supplied',
   intervals,
 }) => {
   const width = 880;
@@ -54,13 +54,15 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
     prevY = statusToY(intervals[0].status);
     pathD = `M ${prevX.toFixed(1)} ${prevY}`;
 
-    intervals.forEach(it => {
+    intervals.forEach((it, index) => {
       const xStart = minToX(it.startMinutes);
       const xEnd = minToX(it.startMinutes + it.durationMinutes);
       const y = statusToY(it.status);
 
-      if (xStart !== prevX || y !== prevY) {
-        pathD += ` L ${xStart.toFixed(1)} ${prevY}`;
+      const previous = intervals[index - 1];
+      if (previous && Math.abs(it.startMinutes - (previous.startMinutes + previous.durationMinutes)) > 1e-7) {
+        pathD += ` M ${xStart.toFixed(1)} ${y}`;
+      } else if (y !== prevY) {
         pathD += ` L ${xStart.toFixed(1)} ${y}`;
       }
 
@@ -76,14 +78,14 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
       <div className="logbook-head">
         <div className="logbook-head-left">
           <span className="logbook-stamp">
-            FMCSA § 395 24-HR RECORD OF DUTY STATUS (SCENARIO MODEL)
+            MODELED DUTY TIMELINE (SCENARIO ONLY)
           </span>
           <span className="logbook-meta">
-            Commercial Driver: <strong style={{ color: '#ffffff' }}>{driverName}</strong>
+            Scenario driver: <strong style={{ color: '#ffffff' }}>{driverName}</strong>
           </span>
         </div>
         <div className="logbook-head-right">
-          <span>Date: <strong style={{ color: '#ffffff', fontFamily: 'monospace' }}>{dateLabel}</strong></span>
+          <span>Scenario period: <strong style={{ color: '#ffffff', fontFamily: 'monospace' }}>{dateLabel}</strong></span>
           <button
             onClick={() => window.print()}
             className="btn-print-dot no-print"
@@ -100,9 +102,9 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
               alignItems: 'center',
               gap: '6px',
             }}
-            title="Print official roadside FMCSA inspection sheet"
+            title="Print scenario timeline and summary"
           >
-            <IconPrinter size={13} /> Print Roadside DOT Sheet
+            <IconPrinter size={13} /> Print scenario timeline
           </button>
           <span style={{ color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
             <span className="live-pulse" style={{ background: '#38bdf8', boxShadow: '0 0 8px #38bdf8' }} />
@@ -287,37 +289,32 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
         </div>
       </div>
 
-      {/* Official FMCSA Roadside DOT Inspection Sheet (Prints on Clean White Paper) */}
+      {/* Scenario summary for print, alongside the modeled timeline. */}
       <div className="dot-inspection-sheet">
         <div className="dot-sheet-header">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div className="dot-sheet-title">DRIVER'S RECORD OF DUTY STATUS</div>
+              <div className="dot-sheet-title">SCENARIO DUTY TIMELINE SUMMARY</div>
               <div style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
-                49 CFR PART 395 · U.S. DEPARTMENT OF TRANSPORTATION / FMCSA
+                Synthetic planning output. Not a driver log, official record or certification.
               </div>
             </div>
             <div style={{ textAlign: 'right', fontSize: '11px' }}>
-              <div>24-HOUR PERIOD STARTING: <strong>MIDNIGHT (00:00)</strong></div>
-              <div>DATE: <strong>{dateLabel}</strong></div>
+              <div>SCENARIO PERIOD: <strong>{dateLabel}</strong></div>
             </div>
           </div>
 
           <div className="dot-meta-grid">
             <div>
-              <div>CARRIER: <strong>Apex Freight Logistics Inc.</strong></div>
-              <div>MAIN OFFICE: <strong>100 Interstate Parkway, Chicago, IL</strong></div>
-              <div>HOME TERMINAL: <strong>Terminal 04 - Midwest Hub</strong></div>
+              <div>CARRIER: <strong>Not supplied</strong></div>
+              <div>OFFICE AND TERMINAL: <strong>Not supplied</strong></div>
             </div>
             <div>
-              <div>DRIVER: <strong>{driverName}</strong></div>
-              <div>CO-DRIVER: <strong>N/A (Solo Operation)</strong></div>
-              <div>DRIVER ID: <strong>DRV-849204</strong></div>
+              <div>SCENARIO DRIVER: <strong>{driverName}</strong></div>
+              <div>DRIVER AND CO-DRIVER RECORDS: <strong>Not supplied</strong></div>
             </div>
             <div>
-              <div>TRACTOR: <strong>TRK-409 (Class 8 Sleeper)</strong></div>
-              <div>TRAILER: <strong>TLR-53-REEFER</strong></div>
-              <div>TOTAL MILES TODAY: <strong>582 MILES</strong></div>
+              <div>TRACTOR, TRAILER AND MILEAGE: <strong>Not supplied</strong></div>
             </div>
           </div>
         </div>
@@ -325,7 +322,7 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
         {/* 24-hr Grid Summary Box */}
         <div className="dot-grid-box">
           <div style={{ fontWeight: 800, fontSize: '12px', marginBottom: '8px' }}>
-            RECORD OF DUTY STATUS GRAPH (24 CONSECUTIVE HOURS)
+            MODELED INTERVAL TOTALS (24-HOUR DISPLAY)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '11px', borderBottom: '1px solid #ccc', paddingBottom: '8px' }}>
             <div>OFF DUTY: <strong>{((totals.OFF_DUTY || 0) / 60).toFixed(1)} hrs</strong></div>
@@ -334,61 +331,21 @@ export const LogbookGrid: React.FC<LogbookGridProps> = ({
             <div>ON DUTY (NOT DRIVING): <strong>{((totals.ON_DUTY_NOT_DRIVING || 0) / 60).toFixed(1)} hrs</strong></div>
           </div>
           <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: 700 }}>
-            TOTAL 24-HR CYCLE SUM: <strong>{(((totals.OFF_DUTY || 0) + (totals.SLEEPER_BERTH || 0) + (totals.DRIVING || 0) + (totals.ON_DUTY_NOT_DRIVING || 0)) / 60).toFixed(1)} HOURS</strong> (Balance Check: Valid 24.0h)
+            TOTAL MODELED: <strong>{(((totals.OFF_DUTY || 0) + (totals.SLEEPER_BERTH || 0) + (totals.DRIVING || 0) + (totals.ON_DUTY_NOT_DRIVING || 0)) / 60).toFixed(1)} HOURS</strong>. Unmodeled time is unknown, not assumed off duty.
           </div>
         </div>
 
-        {/* 70-Hour / 8-Day Rolling Recap Table */}
+        {/* A historical recap needs actual prior driver records. */}
         <div style={{ marginTop: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '12px', marginBottom: '4px' }}>
-            70-HOUR / 8-DAY ROLLING RECAP TABLE (FMCSA § 395.3(b))
+            7/8-DAY CYCLE HISTORY
           </div>
-          <table className="dot-recap-table">
-            <thead>
-              <tr style={{ background: '#f1f5f9' }}>
-                <th>Cycle Line</th>
-                <th>Day 1</th>
-                <th>Day 2</th>
-                <th>Day 3</th>
-                <th>Day 4</th>
-                <th>Day 5</th>
-                <th>Day 6</th>
-                <th>Day 7 (Yest)</th>
-                <th>Day 8 (Today)</th>
-                <th>Total 70h Used</th>
-                <th>Avail Tomorrow</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Duty Hours</td>
-                <td>8.5h</td>
-                <td>9.0h</td>
-                <td>7.5h</td>
-                <td>8.0h</td>
-                <td>9.5h</td>
-                <td>8.5h</td>
-                <td>9.0h</td>
-                <td><strong>{(((totals.DRIVING || 0) + (totals.ON_DUTY_NOT_DRIVING || 0)) / 60).toFixed(1)}h</strong></td>
-                <td><strong>{Math.min(70, (60.0 + (((totals.DRIVING || 0) + (totals.ON_DUTY_NOT_DRIVING || 0)) / 60))).toFixed(1)}h / 70h</strong></td>
-                <td><strong style={{ color: '#16a34a' }}>{(Math.max(0, 70 - (60.0 + (((totals.DRIVING || 0) + (totals.ON_DUTY_NOT_DRIVING || 0)) / 60)))).toFixed(1)}h</strong></td>
-              </tr>
-            </tbody>
-          </table>
+          <p>Prior driver history unavailable. Remaining cycle hours cannot be determined from this scenario.</p>
         </div>
 
-        {/* Driver Certification & Signature */}
+        {/* No certification can be inferred from generated intervals. */}
         <div className="dot-signature-block">
-          <div>
-            <div style={{ fontStyle: 'italic', marginBottom: '16px' }}>
-              "I certify that these entries are true and correct in compliance with 49 CFR Part 395."
-            </div>
-            <div>DRIVER SIGNATURE: ___________________________________________</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div>DATE SIGNED: <strong>{dateLabel}</strong></div>
-            <div style={{ marginTop: '16px' }}>SAFETY AUDIT OFFICER: _________________________</div>
-          </div>
+          <div>No driver signature, certification or actual duty record is provided.</div>
         </div>
       </div>
     </div>

@@ -1,10 +1,22 @@
 /**
- * FMCSA Part 395 Hours of Service (HOS) Compliance Engine.
- * Evaluates driver shift limits, 11-hr driving caps, 14-hr duty windows,
- * mandatory 30-min breaks, and 70-hr rolling cycles.
+ * Illustrative full-rest shift model. Actual driver and cycle status require
+ * carrier rules and recorded history that the current interface does not accept.
  */
 
-import type { HosViolation, DutyInterval } from './types';
+import type { HosViolation, DutyInterval, HOSAuditResult } from './types';
+
+const CONTINUITY_TOLERANCE_MINUTES = 1e-7;
+
+/** Preserve uncertainty when an itinerary combines multiple driver audits. */
+export function summarizeAuditAssessments(audits: HOSAuditResult[]): {
+  assessment: 'modeled' | 'indeterminate'; assessmentReasons: string[];
+  isLegal: boolean; violations: HosViolation[];
+} {
+  const assessmentReasons = [...new Set(audits.flatMap(audit => audit.assessmentReasons))];
+  if (!audits.length) assessmentReasons.push('No driver audits were supplied.');
+  const assessment = audits.length && audits.every(audit => audit.assessment === 'modeled') ? 'modeled' : 'indeterminate';
+  return { assessment, assessmentReasons, isLegal: assessment === 'modeled' && audits.every(audit => audit.isCompliant), violations: audits.flatMap(audit => audit.violations) };
+}
 
 export const HOS_LIMITS = {
   MAX_DRIVE_HOURS_PER_SHIFT: 11.0,
@@ -19,13 +31,34 @@ export const HOS_LIMITS = {
 /**
  * Checks a sequence of duty intervals for regulatory violations.
  */
-export function auditDutyIntervals(intervals: DutyInterval[]): {
-  isCompliant: boolean;
-  violations: HosViolation[];
-  totalDrivingMinutes: number;
-  totalOnDutyMinutes: number;
-  totalOffDutyMinutes: number;
-} {
+export function auditDutyIntervals(intervals: DutyInterval[]): HOSAuditResult {
+  const statuses = new Set(['OFF_DUTY', 'SLEEPER_BERTH', 'DRIVING', 'ON_DUTY_NOT_DRIVING']);
+  const assessmentReasons: string[] = [];
+  if (!Array.isArray(intervals) || intervals.length === 0) {
+    assessmentReasons.push('No duty intervals were supplied.');
+  } else {
+    let previousEnd: number | null = null;
+    for (const [index, interval] of intervals.entries()) {
+      if (!interval || !statuses.has(interval.status)) {
+        assessmentReasons.push(`Interval ${index + 1} has an unknown duty status.`);
+        break;
+      }
+      if (!Number.isFinite(interval.startMinutes) || interval.startMinutes < 0 ||
+          !Number.isFinite(interval.durationMinutes) || interval.durationMinutes <= 0 ||
+          !Number.isFinite(interval.startMinutes + interval.durationMinutes)) {
+        assessmentReasons.push(`Interval ${index + 1} needs a finite, nonnegative start and a finite, positive duration.`);
+        break;
+      }
+      if (previousEnd !== null && Math.abs(interval.startMinutes - previousEnd) > CONTINUITY_TOLERANCE_MINUTES) {
+        assessmentReasons.push(`Interval ${index + 1} is out of order, overlaps, or leaves unrecorded time.`);
+        break;
+      }
+      previousEnd = interval.startMinutes + interval.durationMinutes;
+    }
+  }
+  if (assessmentReasons.length) {
+    return { assessment: 'indeterminate', assessmentReasons, shiftChecksPassed: null, cycleAssessment: 'indeterminate', cycleIllustration: null, isCompliant: false, violations: [], totalDrivingMinutes: null, totalOnDutyMinutes: null, totalOffDutyMinutes: null };
+  }
   const violations: HosViolation[] = [];
   let drivingMinutesInShift = 0;
   let onDutyMinutesInShift = 0;
@@ -37,6 +70,7 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
 
   // History buffer of on-duty minutes for rolling 8-day (192-hour) calculation
   const onDutyEvents: { timeMinutes: number; durationMinutes: number }[] = [];
+  let peakIllustrativeCycleMinutes = 0;
 
   let totalDriving = 0;
   let totalOnDuty = 0;
@@ -46,7 +80,7 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
     const it = intervals[i];
     const dur = it.durationMinutes;
     // An unrecorded gap cannot be silently counted as either rest or a break.
-    if (previousEndMinutes !== null && it.startMinutes !== previousEndMinutes) {
+    if (previousEndMinutes !== null && Math.abs(it.startMinutes - previousEndMinutes) > CONTINUITY_TOLERANCE_MINUTES) {
       consecutiveNonDrivingMinutes = 0;
       consecutiveOffDutyMinutes = 0;
     }
@@ -154,20 +188,16 @@ export function auditDutyIntervals(intervals: DutyInterval[]): {
       .filter(ev => ev.timeMinutes >= windowStartMinute && ev.timeMinutes <= currentEndMinute)
       .reduce((sum, ev) => sum + ev.durationMinutes, 0);
 
-    if (rollingCycleMinutes > HOS_LIMITS.MAX_CYCLE_HOURS_70_8 * 60 && (it.status === 'DRIVING' || it.status === 'ON_DUTY_NOT_DRIVING')) {
-      violations.push({
-        rule: '70_HOUR_CYCLE',
-        severity: 'CRITICAL_OOS',
-        occurredAtMile: 0,
-        occurredAtTimeMinutes: currentEndMinute,
-        message: `70-Hour / 8-Day Limit Exceeded: ${(rollingCycleMinutes / 60).toFixed(1)} on-duty hours in rolling 8-day window.`,
-        statutoryRemedy: 'Must take 34-hour restart or wait for rolling cycle hours to roll off.',
-      });
-    }
+    peakIllustrativeCycleMinutes = Math.max(peakIllustrativeCycleMinutes, rollingCycleMinutes);
   }
 
   return {
-    isCompliant: violations.length === 0,
+    assessment: 'indeterminate',
+    assessmentReasons: ['Cycle status is unknown: prior duty history, carrier cycle selection and day boundary are not supplied.'],
+    shiftChecksPassed: violations.length === 0,
+    cycleAssessment: 'indeterminate',
+    cycleIllustration: { peakOnDutyMinutes: peakIllustrativeCycleMinutes, assumes34HourRestart: true },
+    isCompliant: false,
     violations,
     totalDrivingMinutes: totalDriving,
     totalOnDutyMinutes: totalOnDuty,

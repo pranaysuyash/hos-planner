@@ -8,5 +8,5 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   server: { port: 5175, host: true },
-  test: { include: ['tests/**/*.test.ts'], environment: 'node' },
+  test: { include: ['tests/**/*.test.{ts,tsx}'], environment: 'node' },
 });

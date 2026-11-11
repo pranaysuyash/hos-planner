@@ -41,12 +41,13 @@ export function resultForDutyPlan(shipment: Shipment, input: DutyDraft, plan: Co
   const expected = planCorridorItinerary({ ...input, initialDrivingHoursRemaining: 11, initialShiftHoursRemaining: 14 });
   const expectedAudit = auditDutyIntervals(intervalsForPlan(expected));
   if (JSON.stringify(plan) !== JSON.stringify(expected) || JSON.stringify(audit) !== JSON.stringify(expectedAudit)) throw new Error('The reviewed itinerary or audit differs from its native assumptions. Recalculate before publication.');
+  const assessmentReasons = [...new Set([...plan.assessmentReasons, ...audit.assessmentReasons])];
   return {
-    ok: plan.isLegal && audit.isCompliant,
-    summary: `${plan.totalTransitHours.toFixed(1)} modeled transit hours for ${shipment.input.driverId} at ${input.avgSpeedMph} mph. Full-rest solo scenario; no live ELD or appointment guarantee.`,
+    ok: false,
+    summary: `${plan.totalTransitHours.toFixed(1)} modeled transit hours. Cycle assessment is indeterminate; this review cannot authorize dispatch.`,
     details: {
       driverId: shipment.input.driverId, priorRestHours: input.priorRestHours, ruleScope: 'full_rest_only',
-      isLegal: plan.isLegal && audit.isCompliant, totalTransitHours: plan.totalTransitHours,
+      assessmentVersion: 1, assessment: 'indeterminate', assessmentReasons, isLegal: false, totalTransitHours: plan.totalTransitHours,
       waypoints: structuredClone(plan.waypoints), violations: structuredClone([...plan.violations, ...audit.violations]),
       nativeInputs: structuredClone(input), nativeItinerary: structuredClone(plan), nativeAudit: structuredClone(audit),
       source: 'Native deterministic scenario model; departure time, actual driver history and live ELD records are not supplied.',

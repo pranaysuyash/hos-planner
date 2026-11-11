@@ -1,3 +1,5 @@
+import type { CorridorItineraryPlan } from './types';
+
 /**
  * Cross-Tab Platform Event Bus (trucking-platform-bus).
  * Provides zero-latency, local-first reactive synchronization across all sovereign
@@ -47,6 +49,10 @@ export interface PlatformEventPayloads {
     totalTransitHours: number;
     driverMode: 'solo' | 'team';
     layoverCount: number;
+    schemaVersion: 1;
+    source: 'scenario_model';
+    assessment: 'modeled_feasible' | 'modeled_violations' | 'indeterminate';
+    assessmentReasons: string[];
     isLegal: boolean;
   };
   TELEMATICS_STREAM_TICK: {
@@ -65,6 +71,17 @@ export interface PlatformEventPayloads {
     severity: 'info' | 'warning' | 'critical';
     message: string;
     timestamp: string;
+  };
+}
+
+/** Local informational scenario only; it is not shipment-bound or operational authority. */
+export function hosScenarioPayload(corridorId: string, plan: CorridorItineraryPlan): PlatformEventPayloads['HOS_SCHEDULE_UPDATED'] {
+  return {
+    corridorId, totalTransitHours: plan.totalTransitHours, driverMode: plan.driverMode,
+    layoverCount: plan.mandatorySleeperCount, schemaVersion: 1, source: 'scenario_model',
+    assessment: plan.assessment === 'indeterminate' ? 'indeterminate' : plan.isLegal ? 'modeled_feasible' : 'modeled_violations',
+    assessmentReasons: [...plan.assessmentReasons],
+    isLegal: plan.assessment === 'modeled' && plan.isLegal,
   };
 }
 

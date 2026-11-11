@@ -73,6 +73,8 @@ export interface CorridorItineraryPlan {
   mandatorySleeperCount: number;
   mandatory30mBreakCount: number;
 
+  assessment: 'modeled' | 'indeterminate';
+  assessmentReasons: string[];
   isLegal: boolean;
   violations: HosViolation[];
   waypoints: HosWaypoint[];
@@ -84,9 +86,17 @@ export interface CorridorItineraryPlan {
 }
 
 export interface HOSAuditResult {
+  /** Whether the supplied intervals can be evaluated under this scenario model. */
+  assessment: 'modeled' | 'indeterminate';
+  assessmentReasons: string[];
+  /** Shift checks assume a fresh start and are not an actual driver determination. */
+  shiftChecksPassed: boolean | null;
+  cycleAssessment: 'indeterminate';
+  /** Illustrative legacy 192-hour arithmetic only; not a 60/7 or 70/8 determination. */
+  cycleIllustration: { peakOnDutyMinutes: number; assumes34HourRestart: true } | null;
   isCompliant: boolean;
   violations: HosViolation[];
-  totalDrivingMinutes: number;
-  totalOnDutyMinutes: number;
-  totalOffDutyMinutes: number;
+  totalDrivingMinutes: number | null;
+  totalOnDutyMinutes: number | null;
+  totalOffDutyMinutes: number | null;
 }

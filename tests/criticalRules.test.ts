@@ -24,7 +24,8 @@ describe('Critical duty eligibility boundaries', () => {
     const audit = auditDutyIntervals(duty([
       ['DRIVING', 480], ['ON_DUTY_NOT_DRIVING', 15], ['OFF_DUTY', 15], ['DRIVING', 60],
     ]));
-    expect(audit.isCompliant).toBe(true);
+    expect(audit.shiftChecksPassed).toBe(true);
+    expect(audit.cycleAssessment).toBe('indeterminate');
   });
 
   it('does not combine nonconsecutive short interruptions', () => {

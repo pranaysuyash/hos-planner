@@ -4,7 +4,7 @@ import { planCorridorItinerary } from '../src/engine/corridor';
 import type { DutyInterval } from '../src/engine/types';
 
 describe('FMCSA Part 395 Hours of Service (HOS) Engine', () => {
-  it('passes a fully compliant legal shift (8h driving, 30m break, 2h driving, 10h rest)', () => {
+  it('passes modeled shift checks while leaving the cycle indeterminate', () => {
     const intervals: DutyInterval[] = [
       { status: 'ON_DUTY_NOT_DRIVING', startMinutes: 0, durationMinutes: 15, location: 'Terminal', remark: 'Pre-Trip' },
       { status: 'DRIVING', startMinutes: 15, durationMinutes: 420, location: 'Highway', remark: 'Drive leg 1' }, // 7 hrs
@@ -15,7 +15,8 @@ describe('FMCSA Part 395 Hours of Service (HOS) Engine', () => {
     ];
 
     const audit = auditDutyIntervals(intervals);
-    expect(audit.isCompliant).toBe(true);
+    expect(audit.shiftChecksPassed).toBe(true);
+    expect(audit.assessment).toBe('indeterminate');
     expect(audit.violations).toHaveLength(0);
     expect(audit.totalDrivingMinutes).toBe(600); // 10 hours
   });
@@ -67,7 +68,9 @@ describe('Interstate Corridor Transit Planner', () => {
       driverMode: 'solo',
     });
 
-    expect(plan.isLegal).toBe(true);
+    expect(plan.assessment).toBe('indeterminate');
+    expect(plan.isLegal).toBe(false);
+    expect(plan.violations).toHaveLength(0);
     expect(plan.mandatorySleeperCount).toBeGreaterThanOrEqual(1);
     expect(plan.totalTransitHours).toBeGreaterThan(26.0); // 16.8 driving + 10 rest + inspection
     expect(plan.waypoints.length).toBeGreaterThan(3);
@@ -86,7 +89,8 @@ describe('Interstate Corridor Transit Planner', () => {
       driverMode: 'team',
     });
 
-    expect(teamPlan.isLegal).toBe(true);
+    expect(teamPlan.assessment).toBe('indeterminate');
+    expect(teamPlan.isLegal).toBe(false);
     expect(teamPlan.mandatorySleeperCount).toBe(0); // No 10h truck layovers
     expect(teamPlan.totalTransitHours).toBeLessThan(19.0); // Continuous driving with driver swaps (vs solo which requires 10h layover and takes > 28h)
   });
@@ -102,7 +106,8 @@ describe('Interstate Corridor Transit Planner', () => {
     });
     expect(planP04.pureDrivingHours).toBeCloseTo(9.68, 1);
     expect(planP04.mandatorySleeperCount).toBe(0); // Under 11 hours pure driving!
-    expect(planP04.isLegal).toBe(true);
+    expect(planP04.assessment).toBe('indeterminate');
+    expect(planP04.isLegal).toBe(false);
 
     // Simulated Product 05 telematics route: 1200 miles long haul
     const planP05 = planCorridorItinerary({

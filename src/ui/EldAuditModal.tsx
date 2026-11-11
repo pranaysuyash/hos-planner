@@ -26,6 +26,22 @@ interface ReportSnapshot {
   preparedAt: string;
 }
 
+export function dutyReportStatus(plan: CorridorItineraryPlan, audit: HOSAuditResult): string {
+  if (plan.assessment === 'indeterminate' || audit.assessment === 'indeterminate') {
+    const reasons = [...plan.assessmentReasons, ...audit.assessmentReasons];
+    return `Cannot assess overall duty status: ${[...new Set(reasons)].join(' ')}`;
+  }
+  return plan.isLegal && audit.isCompliant
+    ? 'No violations detected within the supplied model intervals.'
+    : 'The native model detected violations; review the entries below.';
+}
+
+export function dutyReportMessages(plan: CorridorItineraryPlan, audit: HOSAuditResult): string[] {
+  return plan.assessment === 'indeterminate' || audit.assessment === 'indeterminate'
+    ? [dutyReportStatus(plan, audit)]
+    : [dutyReportStatus(plan, audit), plan.complianceSummary];
+}
+
 /** A frozen planning report per opening; it never certifies a driver's actual log. */
 export function EldAuditModal({ plan, audit, driverMode, context, isOpen, onClose }: EldAuditModalProps) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -77,8 +93,7 @@ export function EldAuditModal({ plan, audit, driverMode, context, isOpen, onClos
           <tr><th scope="row">TOTAL MODELED TRIP</th><td>{(totalMinutes / 60).toFixed(2)}</td></tr>
         </tbody></table></div>
         <h3>Native model checks</h3>
-        <p>{report.plan.isLegal && report.audit.isCompliant ? 'No violations detected within the supplied model intervals.' : 'The native model detected violations; review the entries below.'}</p>
-        <p>{report.plan.complianceSummary}</p>
+        {dutyReportMessages(report.plan, report.audit).map((message, index) => <p key={index}>{message}</p>)}
         <p>The audit starts from the supplied scenario. It does not establish preceding eight-day duty history or validate split-sleeper pairings. Team exploration does not replace an individual driver log.</p>
         {violations.length > 0 && <ul>{violations.map((v, i) => <li key={i}><strong>{v.rule} · {v.severity}</strong>: {v.message} <span>{v.statutoryRemedy}</span></li>)}</ul>}
         <div className="duty-report-table"><table><caption>Complete reviewed itinerary</caption><thead><tr><th scope="col">Elapsed end</th><th scope="col">Location and activity</th><th scope="col">Duty status</th><th scope="col">Minutes</th></tr></thead><tbody>

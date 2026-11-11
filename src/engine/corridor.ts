@@ -4,8 +4,8 @@
  * with mandatory 30-min rest breaks, 10-hr sleeper berths, and fuel stops.
  */
 
-import type { CorridorItineraryPlan, HosWaypoint, DutyInterval, HosViolation } from './types';
-import { HOS_LIMITS, auditDutyIntervals } from './hos';
+import type { CorridorItineraryPlan, HosWaypoint, DutyInterval } from './types';
+import { HOS_LIMITS, auditDutyIntervals, summarizeAuditAssessments } from './hos';
 
 export interface RoutePreset {
   id: string;
@@ -571,15 +571,13 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
   const totalOnDutyHours = Number((totalOnDutyMinutes / 60).toFixed(1));
   const totalRestHours = Number((totalRestMinutes / 60).toFixed(1));
 
-  let isLegal = false;
-  let violations: HosViolation[] = [];
+  let assessments: ReturnType<typeof auditDutyIntervals>[];
 
   if (driverMode === 'team') {
     // Audit both Driver A and Driver B separately for team operations
     const auditA = auditDutyIntervals(driverAIntervals);
     const auditB = auditDutyIntervals(driverBIntervals);
-    isLegal = auditA.isCompliant && auditB.isCompliant;
-    violations = [...auditA.violations, ...auditB.violations];
+    assessments = [auditA, auditB];
   } else {
     // Convert waypoints into continuous DutyIntervals and validate through the independent HOS engine
     const dutyIntervals: DutyInterval[] = [];
@@ -595,9 +593,9 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
       t += wp.durationMinutes;
     }
     const audit = auditDutyIntervals(dutyIntervals);
-    isLegal = audit.isCompliant;
-    violations = audit.violations;
+    assessments = [audit];
   }
+  const { assessment, assessmentReasons, isLegal, violations } = summarizeAuditAssessments(assessments);
 
   return {
     origin,
@@ -611,13 +609,17 @@ export function planCorridorItinerary(opts: PlanOptions): CorridorItineraryPlan 
     totalRestHours,
     mandatorySleeperCount: sleeperCount,
     mandatory30mBreakCount: breakCount,
+    assessment,
+    assessmentReasons,
     isLegal,
     violations,
     waypoints,
     earliestLegalDeliveryEtaHours: totalTransitHours,
-    complianceSummary: isLegal
-      ? `Feasible FMCSA Part 395 corridor scenario with ${sleeperCount} sleeper layover(s) and ${breakCount} 30-min break(s).`
-      : `HOS Compliance Violations Detected (${violations.length} issue(s)): Itinerary violates statutory rules.`,
+    complianceSummary: assessment === 'indeterminate'
+      ? `Cannot determine overall duty status: ${assessmentReasons.join(' ')}`
+      : isLegal
+        ? `Feasible under modeled rules with ${sleeperCount} sleeper layover(s) and ${breakCount} 30-min break(s); actual driver history is not supplied.`
+        : `The scenario model detected ${violations.length} issue(s); operational status requires independent review.`,
     driverAIntervals: driverMode === 'team' ? driverAIntervals : undefined,
     driverBIntervals: driverMode === 'team' ? driverBIntervals : undefined,
   };

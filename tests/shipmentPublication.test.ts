@@ -9,12 +9,14 @@ const native = (): DutyDraft => ({ origin: 'A', destination: 'B', distanceMiles:
 function result(input = native()) { const plan = planCorridorItinerary(input); return resultForDutyPlan(shipment(), input, plan, auditDutyIntervals(intervalsForPlan(plan))); }
 
 describe('Reviewed native duty publication', () => {
-  it('retains the exact reviewed speed, itinerary, audit and declared driver', () => {
-    const input = native(); const saved = result(input);
-    expect(saved.details.nativeInputs).toEqual(input);
-    expect(saved.details.driverId).toBe('driver-declared');
-    expect((saved.details.nativeItinerary as { avgSpeedMph: number }).avgSpeedMph).toBe(48);
-    expect(saved.details.totalTransitHours).not.toBe(planCorridorItinerary({ ...input, avgSpeedMph: 55 }).totalTransitHours);
+  it('retains the reviewed native inputs as a non-authoritative indeterminate result', () => {
+    const input = native();
+    const plan = planCorridorItinerary(input);
+    expect(plan.avgSpeedMph).toBe(48);
+    expect(plan.totalTransitHours).not.toBe(planCorridorItinerary({ ...input, avgSpeedMph: 55 }).totalTransitHours);
+    const review = result(input);
+    expect(review).toMatchObject({ ok: false, details: { assessment: 'indeterminate', isLegal: false, nativeInputs: input } });
+    expect(review.summary).toMatch(/cannot authorize dispatch/i);
   });
   it.each([0, -1, NaN, Infinity, 0.00000001])('rejects nonprogressing or unbounded speed %s before planning', avgSpeedMph => {
     expect(validateDutyDraft({ ...native(), avgSpeedMph })).not.toBe('');
@@ -31,8 +33,14 @@ describe('Reviewed native duty publication', () => {
     expect(() => resultForDutyPlan(shipment(), input, { ...plan, totalTransitHours: 1 }, audit)).toThrow(/Recalculate/);
     expect(() => resultForDutyPlan(shipment(), input, plan, { ...audit, totalDrivingMinutes: 0 })).toThrow(/Recalculate/);
   });
+  it('refuses to publish an indeterminate assessment as a negative legal result', () => {
+    const input = native(); const plan = planCorridorItinerary(input); const audit = auditDutyIntervals(intervalsForPlan(plan));
+    expect(resultForDutyPlan(shipment(), input, plan, audit)).toMatchObject({ ok: false, details: { assessment: 'indeterminate', isLegal: false } });
+    expect(() => resultForDutyPlan(shipment(), input, plan, { ...audit, assessmentReasons: ['Missing time'] })).toThrow(/Recalculate/);
+    expect(() => resultForDutyPlan(shipment(), input, { ...plan, assessmentReasons: ['Missing time'] }, audit)).toThrow(/Recalculate/);
+  });
   it('restores accepted supported speed only when canonical declarations still agree', () => {
-    const record = shipment(); record.results.hos = { ...result(), productId: 'product-03-hos-planner', inputRevision: 4, recordedAt: '2026-10-22T00:00:00Z' };
+    const record = shipment(); record.results.hos = { ok: true, summary: 'Previously saved scenario', details: { nativeInputs: native() }, productId: 'product-03-hos-planner', inputRevision: 4, recordedAt: '2026-10-22T00:00:00Z' };
     expect(dutyForShipment(record).avgSpeedMph).toBe(48);
     record.inputRevision++;
     expect(dutyForShipment(record).avgSpeedMph).toBe(55);
