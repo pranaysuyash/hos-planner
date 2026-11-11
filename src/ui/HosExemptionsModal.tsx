@@ -5,6 +5,7 @@ import {
   evaluateShortHaul16Hour,
   categorizeSpecialDutyStatus,
 } from '../engine/hosExemptions';
+import { IconBed, IconLeaf, IconSnowflake, IconX } from './icons';
 
 interface HosExemptionsModalProps {
   isOpen: boolean;
@@ -142,7 +143,7 @@ export const HosExemptionsModal: React.FC<HosExemptionsModalProps> = ({
               justifyContent: 'center',
             }}
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -151,8 +152,9 @@ export const HosExemptionsModal: React.FC<HosExemptionsModalProps> = ({
           {/* Section 1: Agricultural 150 Air-Mile Exemption */}
           <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
-                🌾 49 CFR § 395.1(k) Agricultural 150 Air-Mile Exemption
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconLeaf size={14} color="#16a34a" />
+                <span>49 CFR § 395.1(k) Agricultural 150 Air-Mile Exemption</span>
               </div>
               <span
                 style={{
@@ -211,8 +213,9 @@ export const HosExemptionsModal: React.FC<HosExemptionsModalProps> = ({
           {/* Section 2: Adverse Driving Conditions */}
           <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
-                ❄️ 49 CFR § 395.1(b)(1) Adverse Driving Conditions (2-Hour Extension)
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconSnowflake size={14} color="#0284c7" />
+                <span>49 CFR § 395.1(b)(1) Adverse Driving Conditions (2-Hour Extension)</span>
               </div>
               <span
                 style={{
@@ -256,8 +259,9 @@ export const HosExemptionsModal: React.FC<HosExemptionsModalProps> = ({
 
           {/* Section 3: Special Duty Modes (Personal Conveyance vs Yard Move) */}
           <div style={{ padding: 14, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 8 }}>
-              🛏️ Special Duty Logging Mode (Personal Conveyance vs. Yard Move)
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconBed size={14} color="#0284c7" />
+              <span>Special Duty Logging Mode (Personal Conveyance vs. Yard Move)</span>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button

@@ -5,6 +5,7 @@ import {
   MAJOR_BORDER_CROSSINGS,
   auditCrossBorderCompliance,
 } from '../engine/crossBorderHos';
+import { IconAlertTriangle, IconCheck, IconGlobe, IconX } from './icons';
 
 export interface CrossBorderHosModalProps {
   isOpen: boolean;
@@ -85,9 +86,10 @@ export const CrossBorderHosModal: React.FC<CrossBorderHosModalProps> = ({
           <div>
             <h3
               id="cross-border-hos-title"
-              style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#38bdf8' }}
+              style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-              🌐 USMCA Cross-Border HOS Regulations
+              <IconGlobe size={16} />
+              <span>USMCA Cross-Border HOS Regulations</span>
             </h3>
             <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#94a3b8' }}>
               Statutory Rules for United States (FMCSA), Canada (SOR/2005-313), and Mexico (NOM-087)
@@ -105,7 +107,7 @@ export const CrossBorderHosModal: React.FC<CrossBorderHosModalProps> = ({
               padding: '4px 8px',
             }}
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -258,12 +260,16 @@ export const CrossBorderHosModal: React.FC<CrossBorderHosModalProps> = ({
               <span
                 style={{
                   fontSize: '12px',
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontFamily: 'monospace',
                   color: audit.isOverallLegal ? '#10b981' : '#ef4444',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                LEGAL STATUS: {audit.isOverallLegal ? '✓ COMPLIANT UNDER JURISDICTION' : '⚠️ STATUTORY VIOLATION'}
+                {audit.isOverallLegal ? <IconCheck size={13} /> : <IconAlertTriangle size={13} />}
+                <span>LEGAL STATUS: {audit.isOverallLegal ? 'COMPLIANT UNDER JURISDICTION' : 'STATUTORY VIOLATION'}</span>
               </span>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                 Driven: <strong>{currentDrivingHours}h</strong> / On-Duty: <strong>{currentDutyHours}h</strong>

@@ -5,6 +5,7 @@ import {
   DailyLogRecapDay,
   HosRecapSummary,
 } from '../engine/hosRecap';
+import { IconAlertTriangle, IconX, IconZap } from './icons';
 
 interface HosRecapModalProps {
   isOpen: boolean;
@@ -93,7 +94,7 @@ export const HosRecapModal: React.FC<HosRecapModalProps> = ({
             }}
             aria-label="Close"
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -151,7 +152,7 @@ export const HosRecapModal: React.FC<HosRecapModalProps> = ({
                 gap: 12,
               }}
             >
-              <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+              <IconAlertTriangle size={20} color="#ef4444" />
               <div>
                 <strong style={{ color: '#fca5a5', fontSize: '0.85rem' }}>
                   Statutory 34-Hour Restart Advisory Recommended
@@ -322,8 +323,9 @@ export const HosRecapModal: React.FC<HosRecapModalProps> = ({
                     </span>
                   ))}
                   {stop.hasShorePower && (
-                    <span style={{ background: '#0369a1', padding: '2px 6px', borderRadius: 3, fontSize: '0.65rem', color: '#ffffff', fontWeight: 600 }}>
-                      ⚡ Shore Power
+                    <span style={{ background: '#0369a1', padding: '2px 6px', borderRadius: 3, fontSize: '0.65rem', color: '#ffffff', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <IconZap size={11} />
+                      <span>Shore Power</span>
                     </span>
                   )}
                 </div>

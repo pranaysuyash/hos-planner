@@ -69,7 +69,9 @@ export function getTenantProfile(): TenantProfile {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch {}
+    } catch (err) {
+      console.warn('SuiteDock: failed to parse stored tenant profile', err);
+    }
   }
   return {
     tenantId: 'tenant_apex_freight',
@@ -111,7 +113,11 @@ export const SuiteDock: React.FC<SuiteDockProps> = ({ currentProductId }) => {
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY && e.newValue) {
-        try { setProfile(JSON.parse(e.newValue)); } catch {}
+        try {
+          setProfile(JSON.parse(e.newValue));
+        } catch (err) {
+          console.warn('SuiteDock: ignoring malformed tenant profile storage update', err);
+        }
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -199,7 +205,7 @@ export const SuiteDock: React.FC<SuiteDockProps> = ({ currentProductId }) => {
           userRole: 'enterprise_admin',
           licensedProducts: CANONICAL_PRODUCTS.map((p) => p.id),
         }));
-        setTrialToast(`Switched to Full Enterprise Command Suite (All 6 Tools)`);
+        setTrialToast(`Switched to Full Enterprise Command Suite (All ${CANONICAL_PRODUCTS.length} Tools)`);
         break;
     }
     setTimeout(() => setTrialToast(null), 3500);
@@ -558,7 +564,7 @@ export const SuiteDock: React.FC<SuiteDockProps> = ({ currentProductId }) => {
                     fontSize: '12px',
                   }}
                 >
-                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#818cf8' }}><IconShieldAlert size={14} /> Safety & Telematics</strong>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#2dd4bf' }}><IconShieldAlert size={14} /> Safety & Telematics</strong>
                   <span style={{ fontSize: '10px', color: '#94a3b8' }}>P03 HOS Planner + P05 Telematics</span>
                 </button>
 
@@ -576,7 +582,7 @@ export const SuiteDock: React.FC<SuiteDockProps> = ({ currentProductId }) => {
                   }}
                 >
                   <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38bdf8' }}><IconGlobe size={14} /> Enterprise Fleet Suite</strong>
-                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>All 6 platform products unlocked</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>All {CANONICAL_PRODUCTS.length} platform products unlocked</span>
                 </button>
               </div>
             </div>

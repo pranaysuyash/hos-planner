@@ -3,6 +3,7 @@ import {
   evaluateSplitSleeper,
   calculateRolling70HourRecap,
 } from '../engine/splitSleeper';
+import { IconAlertTriangle, IconCheck, IconX, IconZap } from './icons';
 
 interface SplitSleeperModalProps {
   isOpen: boolean;
@@ -102,13 +103,26 @@ export const SplitSleeperModal: React.FC<SplitSleeperModalProps> = ({
                   fontSize: 11,
                   fontWeight: 700,
                   padding: '3px 8px',
-                  borderRadius: 9999,
+                  borderRadius: 6,
                   background: splitEvaluation.isQualifyingSplit ? '#dcfce7' : '#fee2e2',
                   color: splitEvaluation.isQualifyingSplit ? '#15803d' : '#b91c1c',
                   border: `1px solid ${splitEvaluation.isQualifyingSplit ? '#86efac' : '#fca5a5'}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
                 }}
               >
-                {splitEvaluation.isQualifyingSplit ? `✓ LEGAL ${splitEvaluation.splitPattern.toUpperCase()} SPLIT` : '⚠ INVALID SPLIT'}
+                {splitEvaluation.isQualifyingSplit ? (
+                  <>
+                    <IconCheck size={12} />
+                    <span>LEGAL {splitEvaluation.splitPattern.toUpperCase()} SPLIT</span>
+                  </>
+                ) : (
+                  <>
+                    <IconAlertTriangle size={12} />
+                    <span>INVALID SPLIT</span>
+                  </>
+                )}
               </span>
             </div>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
@@ -128,7 +142,7 @@ export const SplitSleeperModal: React.FC<SplitSleeperModalProps> = ({
               lineHeight: 1,
             }}
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -293,9 +307,13 @@ export const SplitSleeperModal: React.FC<SplitSleeperModalProps> = ({
                     color: '#b45309',
                     cursor: 'pointer',
                     fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
                   }}
                 >
-                  ⚡ Heavy Week (66h)
+                  <IconZap size={12} />
+                  <span>Heavy Week (66h)</span>
                 </button>
                 <button
                   type="button"
@@ -357,16 +375,16 @@ export const SplitSleeperModal: React.FC<SplitSleeperModalProps> = ({
                       }}
                     >
                       <td style={{ padding: '8px 10px' }}>
-                        {d.dateStr} {isCurrentDay && '◀ TODAY'}
+                        {d.dateStr} {isCurrentDay && '(TODAY)'}
                       </td>
                       <td style={{ padding: '8px 10px' }}>{d.drivingHours}h</td>
                       <td style={{ padding: '8px 10px' }}>{d.onDutyNotDrivingHours}h</td>
                       <td style={{ padding: '8px 10px', color: '#0f172a', fontWeight: 600 }}>{d.totalOnDutyHours}h</td>
                       <td style={{ padding: '8px 10px' }}>
-                        {d.offDutyHours}h {d.has34HourRestart && '⚡ 34h RESTART'}
+                        {d.offDutyHours}h{d.has34HourRestart && ' (34h RESTART)'}
                       </td>
-                      <td style={{ padding: '8px 10px', color: d.isViolation ? '#dc2626' : '#1e293b', fontWeight: d.isViolation ? 800 : 500 }}>
-                        {d.hoursWorkedPast7Days}h {d.isViolation && '⚠ VIOLATION'}
+                      <td style={{ padding: '8px 10px', color: d.isViolation ? '#dc2626' : '#1e293b', fontWeight: d.isViolation ? 700 : 500 }}>
+                        {d.hoursWorkedPast7Days}h{d.isViolation && ' (VIOLATION)'}
                       </td>
                       <td style={{ padding: '8px 10px', color: '#0284c7', fontWeight: 700 }}>
                         {d.hoursAvailableToday}h

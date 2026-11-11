@@ -14,6 +14,9 @@ import {
   IconFuel,
   IconFlag,
   IconMapPin,
+  IconClock,
+  IconLeaf,
+  IconGlobe,
 } from './icons';
 import { EldAuditModal } from './EldAuditModal';
 import { ScenarioClocks } from './ScenarioClocks';
@@ -404,7 +407,7 @@ export const App: React.FC = () => {
                   {itinerary.assessment === 'indeterminate' || audit.assessment === 'indeterminate' ? 'Overall duty status unavailable' : itinerary.isLegal && audit.isCompliant ? 'Feasible Under Modeled Rules' : 'Model findings detected'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 <button
                   type="button"
                   onClick={() => setIsSplitSleeperModalOpen(true)}
@@ -417,9 +420,13 @@ export const App: React.FC = () => {
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
                   }}
                 >
-                  Split Sleeper 🛏️
+                  <IconBed size={13} />
+                  <span>Split Sleeper</span>
                 </button>
                 <button
                   type="button"
@@ -433,9 +440,13 @@ export const App: React.FC = () => {
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
                   }}
                 >
-                  8-Day Recap &amp; Parking ⏱️
+                  <IconClock size={13} />
+                  <span>8-Day Recap &amp; Parking</span>
                 </button>
                 <button
                   type="button"
@@ -449,9 +460,13 @@ export const App: React.FC = () => {
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
                   }}
                 >
-                  Statutory Exemptions 🌾
+                  <IconLeaf size={13} />
+                  <span>Statutory Exemptions</span>
                 </button>
                 <button
                   type="button"
@@ -465,9 +480,13 @@ export const App: React.FC = () => {
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
                   }}
                 >
-                  Cross-Border USMCA 🌐
+                  <IconGlobe size={13} />
+                  <span>Cross-Border USMCA</span>
                 </button>
                 <button
                   type="button"

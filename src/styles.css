@@ -150,7 +150,7 @@ body {
   height: 7px;
   border-radius: 50%;
   background: #34d399;
-  box-shadow: 0 0 10px #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.45);
   animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 @keyframes pulse-dot {
@@ -177,7 +177,7 @@ body {
   background: #111d33;
   color: #93c5fd;
   border: 1px solid #1e3a5f;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .cross-link:hover {
@@ -304,7 +304,7 @@ input, select {
   color: #ffffff;
   font-size: 13.5px;
   outline: none;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 input:focus, select:focus {
@@ -331,7 +331,7 @@ input:focus, select:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .preset-btn:hover {
@@ -361,7 +361,7 @@ input:focus, select:focus {
   border-radius: 8px;
   padding: 14px 16px;
   position: relative;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .waypoint-item:hover {
   border-color: #38bdf8;
@@ -382,7 +382,7 @@ input:focus, select:focus {
 .icon-origin { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
 .icon-drive { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
 .icon-break { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-.icon-rest { background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); }
+.icon-rest { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; border: 1px solid rgba(45, 212, 191, 0.3); }
 .icon-dest { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 
 .waypoint-content {
@@ -512,7 +512,7 @@ input:focus, select:focus {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .interval-card:hover {
   border-color: #38bdf8;

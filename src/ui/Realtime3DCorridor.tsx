@@ -30,7 +30,6 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
   const totalHours = Math.max(1, plan.totalTransitHours);
   const progressRatio = Math.max(0, Math.min(1, activeTimeHours / totalHours));
 
-  // Initialize Three.js WebGL Scene
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
@@ -84,9 +83,9 @@ export const Realtime3DCorridor: React.FC<Realtime3DCorridorProps> = ({
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    const purpleLight = new THREE.DirectionalLight(0xc084fc, 0.8);
-    purpleLight.position.set(-40, 30, -30);
-    scene.add(purpleLight);
+    const tealFillLight = new THREE.DirectionalLight(0x2dd4bf, 0.8);
+    tealFillLight.position.set(-40, 30, -30);
+    scene.add(tealFillLight);
 
     // 5. Holographic Cyber Terrain Grid
     const grid = new THREE.GridHelper(160, 32, 0x38bdf8, 0x1e293b);
